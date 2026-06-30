@@ -5,25 +5,41 @@ import { supabase } from "@/lib/supabase";
 
 export function AuthScreen() {
   const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSendCode(e: React.FormEvent) {
     e.preventDefault();
     if (!email.trim()) return;
     setLoading(true);
     setError(null);
 
-    const { error: err } = await supabase.auth.signInWithOtp({
+    const { error: err } = await supabase.auth.signInWithOtp({ email: email.trim() });
+
+    if (err) {
+      setError(err.message || "No se pudo enviar el código. Verificá el email e intentá de nuevo.");
+    } else {
+      setSent(true);
+    }
+    setLoading(false);
+  }
+
+  async function handleVerifyCode(e: React.FormEvent) {
+    e.preventDefault();
+    if (!code.trim()) return;
+    setLoading(true);
+    setError(null);
+
+    const { error: err } = await supabase.auth.verifyOtp({
       email: email.trim(),
-      options: { emailRedirectTo: window.location.origin },
+      token: code.trim(),
+      type: "email",
     });
 
     if (err) {
-      setError(err.message || "No se pudo enviar el link. Verificá el email e intentá de nuevo.");
-    } else {
-      setSent(true);
+      setError(err.message || "Código incorrecto o vencido. Pedí uno nuevo.");
     }
     setLoading(false);
   }
@@ -41,21 +57,39 @@ export function AuthScreen() {
       </div>
 
       {sent ? (
-        <div className="w-full rounded-2xl border border-border bg-card p-6 text-center">
-          <p className="text-sm font-semibold text-foreground">Revisá tu email</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Te mandamos un link a <span className="text-foreground">{email}</span>.
-            Tocá el link para entrar — no hace falta contraseña.
+        <form onSubmit={handleVerifyCode} className="w-full space-y-3">
+          <p className="text-center text-sm text-foreground">
+            Te mandamos un código a <span className="font-semibold">{email}</span>
           </p>
+          <input
+            type="text"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Código de 6 dígitos"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={6}
+            required
+            className="h-12 w-full rounded-xl border border-border bg-secondary px-4 text-center text-lg tracking-[0.3em] text-foreground placeholder:tracking-normal placeholder:text-muted-foreground outline-none focus:border-primary"
+          />
+          {error && <p className="text-xs text-destructive">{error}</p>}
+          <Button type="submit" disabled={loading || !code.trim()} className="h-12 w-full rounded-xl text-sm font-bold">
+            {loading ? "Verificando..." : "Confirmar código"}
+          </Button>
           <button
-            onClick={() => setSent(false)}
-            className="mt-4 text-xs font-semibold text-primary"
+            type="button"
+            onClick={() => {
+              setSent(false);
+              setCode("");
+              setError(null);
+            }}
+            className="block w-full text-center text-xs font-semibold text-primary"
           >
             Usar otro email
           </button>
-        </div>
+        </form>
       ) : (
-        <form onSubmit={handleSubmit} className="w-full space-y-3">
+        <form onSubmit={handleSendCode} className="w-full space-y-3">
           <input
             type="email"
             value={email}
@@ -71,7 +105,7 @@ export function AuthScreen() {
             {loading ? "Enviando..." : "Continuar con email"}
           </Button>
           <p className="text-center text-[11px] text-muted-foreground">
-            Te enviamos un link mágico — sin contraseña.
+            Te enviamos un código de acceso — sin contraseña.
           </p>
         </form>
       )}

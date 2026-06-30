@@ -18,37 +18,20 @@ export function useAuth() {
       setUser(session?.user ?? null);
     });
 
-    // El link mágico se abre en una pestaña/contexto separado del de la PWA
-    // instalada (especialmente en iOS standalone). Cuando se vuelve a esta
-    // app, hay que releer la sesión persistida para detectar el login.
-    function recheckSession() {
-      if (document.visibilityState === "visible") {
-        supabase.auth.getSession().then(({ data: { session } }) => {
-          setUser(session?.user ?? null);
-        });
-      }
-    }
-
-    document.addEventListener("visibilitychange", recheckSession);
-    window.addEventListener("focus", recheckSession);
-
-    return () => {
-      subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", recheckSession);
-      window.removeEventListener("focus", recheckSession);
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   async function signIn(email: string) {
-    return supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.origin },
-    });
+    return supabase.auth.signInWithOtp({ email });
+  }
+
+  async function verifyCode(email: string, token: string) {
+    return supabase.auth.verifyOtp({ email, token, type: "email" });
   }
 
   async function signOut() {
     return supabase.auth.signOut();
   }
 
-  return { user, loading, signIn, signOut };
+  return { user, loading, signIn, verifyCode, signOut };
 }

@@ -6,6 +6,7 @@ import { IconButton } from "@/components/IconButton";
 import { EmptyState } from "@/components/EmptyState";
 import { ExerciseInfoDialog } from "@/components/ExerciseInfoDialog";
 import { RoutineEditDialog } from "@/components/RoutineEditDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +28,7 @@ function RoutineCard({
   onDelete: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const previewNames = r.exercises.slice(0, 3).map((e) => e.name).join(", ");
   const remaining = r.exercises.length - 3;
 
@@ -50,9 +52,7 @@ function RoutineCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl border-border bg-card">
             <DropdownMenuItem
-              onClick={() => {
-                if (window.confirm(`¿Eliminar la rutina "${r.name}"?`)) onDelete(r.id);
-              }}
+              onSelect={() => setConfirmDelete(true)}
               className="text-destructive focus:text-destructive"
             >
               Eliminar rutina
@@ -60,6 +60,17 @@ function RoutineCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Eliminar rutina"
+        description={`¿Seguro que querés eliminar "${r.name}"? Esta acción no se puede deshacer.`}
+        onConfirm={() => {
+          setConfirmDelete(false);
+          onDelete(r.id);
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
 
       {open && (
         <div className="mt-3 space-y-2 border-t border-border pt-3">

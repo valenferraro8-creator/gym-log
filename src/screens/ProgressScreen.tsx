@@ -22,6 +22,7 @@ import {
   type SessionRow,
 } from "@/lib/progressData";
 import { computeWeeklyMuscleIntensity, daysSinceMuscleGroupTrained } from "@/lib/muscleVolume";
+import { knownExercises } from "@/data/exerciseLibrary";
 import { cn } from "@/lib/utils";
 
 type SubTab = "ejercicio" | "semanal" | "calendario" | "musculos";
@@ -58,7 +59,11 @@ function GoalsCard({ goals, sessions }: { goals: GoalRecord[]; sessions: Session
 }
 
 function ExerciseTab({ sessions }: { sessions: SessionRow[] }) {
-  const names = useMemo(() => distinctExerciseNames(sessions), [sessions]);
+  const names = useMemo(() => {
+    const trained = distinctExerciseNames(sessions);
+    const rest = knownExercises.filter((n) => !trained.includes(n)).sort((a, b) => a.localeCompare(b));
+    return [...trained, ...rest];
+  }, [sessions]);
   const [selected, setSelected] = useState<string | null>(null);
   const activeName = selected && names.includes(selected) ? selected : (names[0] ?? null);
 

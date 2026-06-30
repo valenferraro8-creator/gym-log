@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
 import { Check, Dumbbell, MoreHorizontal, Plus, Zap } from "lucide-react";
@@ -8,6 +8,7 @@ import { IconButton } from "@/components/IconButton";
 import { EmptyState } from "@/components/EmptyState";
 import { ExerciseInfoDialog } from "@/components/ExerciseInfoDialog";
 import { AddExerciseDialog, type NewExercise } from "@/components/AddExerciseDialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -227,6 +228,7 @@ function ExerciseCard({
   onRemoveExercise: () => void;
 }) {
   const muscleLabel = getPrimaryMuscleLabel(ex.name) ?? ex.muscle;
+  const [confirmRemove, setConfirmRemove] = useState(false);
   return (
     <div className="p-4">
       <div className="mb-3 flex items-start justify-between">
@@ -247,9 +249,7 @@ function ExerciseCard({
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl border-border bg-card">
             <DropdownMenuItem
-              onClick={() => {
-                if (window.confirm(`¿Quitar "${ex.name}" del registro de hoy?`)) onRemoveExercise();
-              }}
+              onSelect={() => setConfirmRemove(true)}
               className="text-destructive focus:text-destructive"
             >
               Quitar ejercicio
@@ -257,6 +257,18 @@ function ExerciseCard({
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Quitar ejercicio"
+        description={`¿Seguro que querés quitar "${ex.name}" del registro de hoy?`}
+        confirmLabel="Quitar"
+        onConfirm={() => {
+          setConfirmRemove(false);
+          onRemoveExercise();
+        }}
+        onCancel={() => setConfirmRemove(false)}
+      />
 
       <div className="mb-1 grid grid-cols-[24px_56px_1fr_1fr_36px] gap-2 px-1 text-[10px] font-bold uppercase tracking-wide text-muted-foreground/80">
         <span className="text-center">Set</span>

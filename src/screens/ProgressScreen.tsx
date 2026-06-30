@@ -1,11 +1,26 @@
 import { useMemo, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChevronDown, TrendingDown, TrendingUp } from "lucide-react";
+import { LineChart, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { MuscleBody } from "@/components/MuscleBody";
 import { GoalRow } from "@/components/GoalRow";
 import { HeroStat } from "@/components/HeroStat";
-import { exerciseStats, goals, weeklyVolume, weightProgress } from "@/data/mock";
+import { EmptyState } from "@/components/EmptyState";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/hooks/useAuth";
+import { useProgressData } from "@/hooks/useProgressData";
+import { useGoals, type GoalRecord } from "@/hooks/useGoals";
+import {
+  bestWeightEver,
+  distinctExerciseNames,
+  exerciseStatsFor,
+  exerciseWeightHistory,
+  sessionsInLastDays,
+  toTrainingSessions,
+  trainedDaysInMonth,
+  weeklyVolumeSeries,
+  type SessionRow,
+} from "@/lib/progressData";
 import { computeWeeklyMuscleIntensity, daysSinceMuscleGroupTrained } from "@/lib/muscleVolume";
 import { cn } from "@/lib/utils";
 
@@ -20,79 +35,130 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function GoalsCard() {
+function computeGoalCurrent(goal: GoalRecord, sessions: SessionRow[]): number {
+  if (goal.exercise_name) return bestWeightEver(sessions, goal.exercise_name);
+  return Math.round((sessionsInLastDays(sessions, 28) / 4) * 10) / 10;
+}
+
+function GoalsCard({ goals, sessions }: { goals: GoalRecord[]; sessions: SessionRow[] }) {
+  if (goals.length === 0) return null;
   return (
     <div className="shadow-card mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
       <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Objetivos</p>
       <div className="space-y-3">
         {goals.map((g) => (
-          <GoalRow key={g.id} goal={g} />
+          <GoalRow
+            key={g.id}
+            goal={{ id: g.id, label: g.label, unit: g.unit, current: computeGoalCurrent(g, sessions), target: g.target }}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function ExerciseTab() {
-  const first = weightProgress[0].weight;
-  const last = weightProgress[weightProgress.length - 1].weight;
-  const trend = Math.round(((last - first) / first) * 100);
+function ExerciseTab({ sessions }: { sessions: SessionRow[] }) {
+  const names = useMemo(() => distinctExerciseNames(sessions), [sessions]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const activeName = selected && names.includes(selected) ? selected : (names[0] ?? null);
+
+  const history = useMemo(() => (activeName ? exerciseWeightHistory(sessions, activeName) : []), [sessions, activeName]);
+  const stats = useMemo(
+    () => (activeName ? exerciseStatsFor(sessions, activeName) : null),
+    [sessions, activeName]
+  );
+
+  if (!activeName) {
+    return (
+      <EmptyState
+        icon={LineChart}
+        title="Sin entrenos registrados todavía"
+        description="Guardá un entrenamiento desde la pestaña Registro para ver tu progreso acá."
+      />
+    );
+  }
+
+  const first = history[0]?.weight ?? 0;
+  const last = history[history.length - 1]?.weight ?? 0;
+  const trend = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
 
   return (
     <div className="space-y-4">
-      <button className="shadow-card card-interactive flex w-full items-center justify-between rounded-xl border border-border bg-card px-4 py-3">
-        <span className="font-display text-sm font-bold text-foreground">Press banca</span>
-        <ChevronDown size={16} className="text-muted-foreground" />
-      </button>
+      <Select value={activeName} onValueChange={setSelected}>
+        <SelectTrigger className="shadow-card card-interactive h-auto rounded-xl border-border bg-card px-4 py-3 text-sm font-bold text-foreground">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent className="rounded-xl border-border bg-card">
+          {names.map((n) => (
+            <SelectItem key={n} value={n} className="text-sm">
+              {n}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
 
-      <div className="shadow-card rounded-2xl border border-border bg-card p-4">
-        <div className="mb-3 flex items-center justify-between">
-          <HeroStat label="Peso máximo actual" value={last} unit="kg" />
-          <span className={cn("flex items-center gap-1 font-mono text-xs font-bold", trend >= 0 ? "text-primary" : "text-destructive")}>
-            {trend >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
-            {trend >= 0 ? "+" : ""}{trend}%
-          </span>
+      {history.length === 0 ? (
+        <EmptyState
+          icon={LineChart}
+          title="Sin series con peso registrado"
+          description="Cuando registres series con peso de este ejercicio, vas a ver acá tu evolución."
+        />
+      ) : (
+        <div className="shadow-card rounded-2xl border border-border bg-card p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <HeroStat label="Peso máximo actual" value={last} unit="kg" />
+            <span className={cn("flex items-center gap-1 font-mono text-xs font-bold", trend >= 0 ? "text-primary" : "text-destructive")}>
+              {trend >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+              {trend >= 0 ? "+" : ""}
+              {trend}%
+            </span>
+          </div>
+          <ResponsiveContainer width="100%" height={160}>
+            <AreaChart data={history} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+              <defs>
+                <linearGradient id="weightFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(217 91% 60%)" stopOpacity={0.35} />
+                  <stop offset="100%" stopColor="hsl(217 91% 60%)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(218 9% 63%)" }} axisLine={false} tickLine={false} />
+              <YAxis
+                width={28}
+                tick={{ fontSize: 10, fill: "hsl(218 9% 63%)" }}
+                axisLine={false}
+                tickLine={false}
+                domain={["dataMin - 2", "dataMax + 2"]}
+              />
+              <Tooltip
+                contentStyle={{ background: "hsl(222 14% 9%)", border: "1px solid hsl(222 12% 18%)", borderRadius: 10, fontSize: 12 }}
+                labelStyle={{ color: "hsl(0 0% 98%)" }}
+                formatter={(value) => [`${value as number} kg`, "Peso"]}
+              />
+              <Area type="monotone" dataKey="weight" stroke="hsl(217 91% 60%)" strokeWidth={2.5} fill="url(#weightFill)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
-        <ResponsiveContainer width="100%" height={160}>
-          <AreaChart data={weightProgress} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
-            <defs>
-              <linearGradient id="weightFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="hsl(217 91% 60%)" stopOpacity={0.35} />
-                <stop offset="100%" stopColor="hsl(217 91% 60%)" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" tick={{ fontSize: 10, fill: "hsl(218 9% 63%)" }} axisLine={false} tickLine={false} />
-            <YAxis
-              width={28}
-              tick={{ fontSize: 10, fill: "hsl(218 9% 63%)" }}
-              axisLine={false}
-              tickLine={false}
-              domain={["dataMin - 2", "dataMax + 2"]}
-            />
-            <Tooltip
-              contentStyle={{ background: "hsl(222 14% 9%)", border: "1px solid hsl(222 12% 18%)", borderRadius: 10, fontSize: 12 }}
-              labelStyle={{ color: "hsl(0 0% 98%)" }}
-              formatter={(value) => [`${value as number} kg`, "Peso"]}
-            />
-            <Area type="monotone" dataKey="weight" stroke="hsl(217 91% 60%)" strokeWidth={2.5} fill="url(#weightFill)" />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      )}
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <StatCard label="1RM estimado (histórico)" value={exerciseStats.best1RM} />
-        <StatCard label="Mejor serie (histórico)" value={exerciseStats.bestSet} />
-        <StatCard label="Volumen (último registro)" value={exerciseStats.totalVolume} />
-        <StatCard label="Series (último registro)" value={String(exerciseStats.totalSets)} />
-      </div>
+      {stats && (
+        <div className="grid grid-cols-2 gap-2.5">
+          <StatCard label="1RM estimado (histórico)" value={stats.best1RM} />
+          <StatCard label="Mejor serie (histórico)" value={stats.bestSet} />
+          <StatCard label="Volumen (último registro)" value={stats.totalVolume} />
+          <StatCard label="Series (último registro)" value={String(stats.totalSets)} />
+        </div>
+      )}
     </div>
   );
 }
 
-function WeeklyTab() {
-  const first = weeklyVolume[0].volume;
-  const last = weeklyVolume[weeklyVolume.length - 1].volume;
-  const trend = Math.round(((last - first) / first) * 100);
+function WeeklyTab({ sessions }: { sessions: SessionRow[] }) {
+  const series = useMemo(() => weeklyVolumeSeries(sessions), [sessions]);
+  const first = series[0]?.volume ?? 0;
+  const last = series[series.length - 1]?.volume ?? 0;
+  const trend = first > 0 ? Math.round(((last - first) / first) * 100) : 0;
+  const entrenosEsteMes = sessionsInLastDays(sessions, 30);
+  const promedioSemana = Math.round((sessionsInLastDays(sessions, 28) / 4) * 10) / 10;
 
   return (
     <div className="space-y-4">
@@ -100,11 +166,12 @@ function WeeklyTab() {
         <div className="mb-3 flex items-center justify-between">
           <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Volumen semanal (kg)</p>
           <span className={cn("flex items-center gap-1 font-mono text-xs font-bold", trend >= 0 ? "text-primary" : "text-destructive")}>
-            {trend >= 0 ? "+" : ""}{trend}% vs. S1
+            {trend >= 0 ? "+" : ""}
+            {trend}% vs. hace 6 sem.
           </span>
         </div>
         <ResponsiveContainer width="100%" height={190}>
-          <BarChart data={weeklyVolume} margin={{ top: 22, right: 4, left: 4, bottom: 0 }}>
+          <BarChart data={series} margin={{ top: 22, right: 4, left: 4, bottom: 0 }}>
             <XAxis dataKey="week" tick={{ fontSize: 10, fill: "hsl(218 9% 63%)" }} axisLine={false} tickLine={false} />
             <YAxis hide domain={[0, "dataMax + 1500"]} />
             <Tooltip
@@ -125,36 +192,36 @@ function WeeklyTab() {
         </ResponsiveContainer>
       </div>
       <div className="grid grid-cols-2 gap-2.5">
-        <StatCard label="Entrenos este mes" value="14" />
-        <StatCard label="Promedio / semana" value="3.5" />
+        <StatCard label="Entrenos este mes" value={String(entrenosEsteMes)} />
+        <StatCard label="Promedio / semana" value={String(promedioSemana)} />
       </div>
     </div>
   );
 }
 
-function CalendarTab() {
+function CalendarTab({ sessions }: { sessions: SessionRow[] }) {
+  const today = new Date();
   const WEEKDAY_LABELS = ["L", "M", "M", "J", "V", "S", "D"];
-  const today = 27;
-  const trainedDays = [2, 3, 5, 7, 9, 10, 12, 14, 16, 17, 19, 21, 23, 24, 26];
 
-  const { days, leadingBlanks, lastTrainedLabel } = useMemo(() => {
-    const monthStart = new Date(2026, 5, 1);
-    const leadingBlanks = (monthStart.getDay() + 6) % 7; // 0 = Monday
-    const daysInMonth = 30;
+  const { days, leadingBlanks, lastTrainedLabel, monthLabel } = useMemo(() => {
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const trainedDays = trainedDaysInMonth(sessions, year, month);
+    const monthStart = new Date(year, month, 1);
+    const leadingBlanks = (monthStart.getDay() + 6) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const todayDate = today.getDate();
     const days = Array.from({ length: daysInMonth }, (_, i) => {
       const day = i + 1;
-      return {
-        day,
-        trained: trainedDays.includes(day),
-        future: day > today,
-        isToday: day === today,
-      };
+      return { day, trained: trainedDays.includes(day), future: day > todayDate, isToday: day === todayDate };
     });
-    const mostRecent = [...trainedDays].reverse().find((d) => d <= today);
-    const diff = mostRecent ? today - mostRecent : null;
+    const mostRecent = [...trainedDays].reverse().find((d) => d <= todayDate);
+    const diff = mostRecent ? todayDate - mostRecent : null;
     const lastTrainedLabel = diff === null ? "—" : diff === 0 ? "Hoy" : diff === 1 ? "Ayer" : `Hace ${diff} días`;
-    return { days, leadingBlanks, lastTrainedLabel };
-  }, []);
+    const monthLabel = today.toLocaleDateString("es-AR", { month: "long", year: "numeric" });
+    return { days, leadingBlanks, lastTrainedLabel, monthLabel: monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessions]);
 
   const trainedCount = days.filter((d) => d.trained).length;
 
@@ -166,7 +233,7 @@ function CalendarTab() {
       </div>
 
       <div className="shadow-card rounded-2xl border border-border bg-card p-4">
-        <p className="mb-3 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Junio 2026</p>
+        <p className="mb-3 text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">{monthLabel}</p>
         <div className="grid grid-cols-7 gap-1.5">
           {WEEKDAY_LABELS.map((label, i) => (
             <div key={i} className="text-center text-[10px] font-bold text-muted-foreground/70">
@@ -198,10 +265,14 @@ function CalendarTab() {
   );
 }
 
-function MusclesTab() {
+function MusclesTab({ sessions }: { sessions: SessionRow[] }) {
   const [weekOffset, setWeekOffset] = useState(0);
-  const intensity = useMemo(() => computeWeeklyMuscleIntensity(undefined, weekOffset), [weekOffset]);
-  const recency = useMemo(() => daysSinceMuscleGroupTrained(), []);
+  const trainingSessions = useMemo(() => toTrainingSessions(sessions), [sessions]);
+  const intensity = useMemo(
+    () => computeWeeklyMuscleIntensity(trainingSessions, weekOffset),
+    [trainingSessions, weekOffset]
+  );
+  const recency = useMemo(() => daysSinceMuscleGroupTrained(trainingSessions), [trainingSessions]);
 
   return (
     <div className="space-y-4">
@@ -267,6 +338,9 @@ function MusclesTab() {
 }
 
 export function ProgressScreen() {
+  const { user } = useAuth();
+  const { sessions, loading: sessionsLoading } = useProgressData(user);
+  const { goals } = useGoals(user);
   const [tab, setTab] = useState<SubTab>("ejercicio");
   const tabs: { id: SubTab; label: string }[] = [
     { id: "ejercicio", label: "Ejercicio" },
@@ -275,11 +349,35 @@ export function ProgressScreen() {
     { id: "musculos", label: "Músculos" },
   ];
 
+  if (sessionsLoading) {
+    return (
+      <div className="pb-4">
+        <TopBar title="Progreso" />
+        <div className="grid place-items-center py-16">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+        </div>
+      </div>
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <div className="pb-4">
+        <TopBar title="Progreso" />
+        <EmptyState
+          icon={Target}
+          title="Todavía no hay entrenos guardados"
+          description="Cuando guardes tu primer entrenamiento desde la pestaña Registro, vas a ver acá tu progreso, volumen semanal y mapa muscular."
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="pb-4">
       <TopBar title="Progreso" />
 
-      <GoalsCard />
+      <GoalsCard goals={goals} sessions={sessions} />
 
       <div className="mb-4 flex gap-1 rounded-xl bg-secondary p-1">
         {tabs.map((t) => (
@@ -296,10 +394,10 @@ export function ProgressScreen() {
         ))}
       </div>
 
-      {tab === "ejercicio" && <ExerciseTab />}
-      {tab === "semanal" && <WeeklyTab />}
-      {tab === "calendario" && <CalendarTab />}
-      {tab === "musculos" && <MusclesTab />}
+      {tab === "ejercicio" && <ExerciseTab sessions={sessions} />}
+      {tab === "semanal" && <WeeklyTab sessions={sessions} />}
+      {tab === "calendario" && <CalendarTab sessions={sessions} />}
+      {tab === "musculos" && <MusclesTab sessions={sessions} />}
     </div>
   );
 }

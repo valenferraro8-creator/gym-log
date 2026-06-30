@@ -1,9 +1,9 @@
 import { muscleGroupOptions, type MuscleId } from "@/data/bodyMapData";
 import { getExerciseMedia } from "@/data/exerciseLibrary";
-import { recentSessions, type TrainingSession } from "@/data/mock";
+import type { TrainingSession } from "@/data/mock";
 
 export function computeWeeklyMuscleIntensity(
-  sessions: TrainingSession[] = recentSessions,
+  sessions: TrainingSession[],
   weekOffset = 0
 ): Partial<Record<MuscleId, number>> {
   const raw: Partial<Record<MuscleId, number>> = {};
@@ -32,7 +32,7 @@ export function computeWeeklyMuscleIntensity(
 
 export type MuscleGroupRecency = { label: string; daysAgo: number | null };
 
-export function daysSinceMuscleGroupTrained(sessions: TrainingSession[] = recentSessions): MuscleGroupRecency[] {
+export function daysSinceMuscleGroupTrained(sessions: TrainingSession[]): MuscleGroupRecency[] {
   const results = muscleGroupOptions.map((group) => {
     let minDays: number | null = null;
     for (const session of sessions) {

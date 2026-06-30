@@ -7,10 +7,14 @@ import { knownExercises } from "@/data/exerciseLibrary";
 import type { Routine } from "@/data/mock";
 import type { RoutineExerciseInput } from "@/hooks/useRoutines";
 
-type Row = RoutineExerciseInput & { key: string };
+type Row = { key: string; name: string; sets: string; reps: string };
 
 function emptyRow(): Row {
-  return { key: `row-${Date.now()}-${Math.random()}`, name: "", sets: 3, reps: "8-12" };
+  return { key: `row-${Date.now()}-${Math.random()}`, name: "", sets: "3", reps: "8-12" };
+}
+
+function toRow(ex: RoutineExerciseInput): Row {
+  return { key: `row-${Math.random()}`, name: ex.name, sets: String(ex.sets), reps: ex.reps };
 }
 
 export function RoutineEditDialog({
@@ -26,7 +30,7 @@ export function RoutineEditDialog({
   const [name, setName] = useState(initial?.name ?? "");
   const [tag, setTag] = useState(initial?.tag ?? "");
   const [rows, setRows] = useState<Row[]>(
-    initial ? initial.exercises.map((ex) => ({ ...ex, key: `row-${Math.random()}` })) : [emptyRow()]
+    initial ? initial.exercises.map(toRow) : [emptyRow()]
   );
   const [saving, setSaving] = useState(false);
 
@@ -34,7 +38,7 @@ export function RoutineEditDialog({
     if (open) {
       setName(initial?.name ?? "");
       setTag(initial?.tag ?? "");
-      setRows(initial ? initial.exercises.map((ex) => ({ ...ex, key: `row-${Math.random()}` })) : [emptyRow()]);
+      setRows(initial ? initial.exercises.map(toRow) : [emptyRow()]);
     }
   }, [open, initial]);
 
@@ -56,7 +60,11 @@ export function RoutineEditDialog({
       await onSave(
         name.trim(),
         tag.trim(),
-        validRows.map((r) => ({ name: r.name.trim(), sets: r.sets, reps: r.reps.trim() || "8-12" }))
+        validRows.map((r) => ({
+          name: r.name.trim(),
+          sets: Math.max(1, parseInt(r.sets, 10) || 3),
+          reps: r.reps.trim() || "8-12",
+        }))
       );
       setOpen(false);
     } finally {
@@ -99,7 +107,7 @@ export function RoutineEditDialog({
               />
               <Input
                 value={row.sets}
-                onChange={(e) => updateRow(row.key, { sets: parseInt(e.target.value, 10) || 0 })}
+                onChange={(e) => updateRow(row.key, { sets: e.target.value })}
                 type="number"
                 inputMode="numeric"
                 placeholder="Sets"

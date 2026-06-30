@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Check, Dumbbell, MoreHorizontal, Plus, Zap } from "lucide-react";
+import { Check, Dumbbell, MoreHorizontal, Plus, Undo2, Zap } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/IconButton";
@@ -376,16 +376,21 @@ export function WorkoutScreen({
   routineName,
   onSave,
   saving = false,
+  canUndo = false,
+  onUndo,
 }: {
   exercises: ExerciseEntry[];
   setExercises: React.Dispatch<React.SetStateAction<ExerciseEntry[]>>;
   routineName: string;
   onSave: () => void;
   saving?: boolean;
+  canUndo?: boolean;
+  onUndo?: () => void;
 }) {
   const todayLabel = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
   const groups = groupExercises(exercises);
   const totalSets = exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+  const [confirmSave, setConfirmSave] = useState(false);
 
   function updateSet(exId: string, setId: string, patch: Partial<ExerciseEntry["sets"][number]>) {
     setExercises((prev) =>
@@ -497,11 +502,28 @@ export function WorkoutScreen({
       <TopBar title="Registro" subtitle={routineName ? `${routineName} · ${todayLabel}` : todayLabel} />
 
       {exercises.length === 0 ? (
-        <EmptyState
-          icon={Dumbbell}
-          title="Sin entreno registrado hoy"
-          description="Elegí una rutina desde la pestaña Rutinas y empezá a sumar series."
-        />
+        <>
+          {canUndo && onUndo && (
+            <div className="shadow-card mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-card-flat p-3.5">
+              <div>
+                <p className="text-sm font-bold text-foreground">Registro guardado</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">¿Te equivocaste? Podés deshacerlo.</p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={onUndo}
+                className="flex items-center gap-1.5 rounded-xl text-xs font-bold"
+              >
+                <Undo2 size={14} /> Deshacer
+              </Button>
+            </div>
+          )}
+          <EmptyState
+            icon={Dumbbell}
+            title="Sin entreno registrado hoy"
+            description="Elegí una rutina desde la pestaña Rutinas y empezá a sumar series."
+          />
+        </>
       ) : (
         <>
           <div className="mb-4 flex items-center justify-between rounded-xl bg-secondary px-3 py-2.5">
@@ -548,7 +570,24 @@ export function WorkoutScreen({
 
           <AddExerciseDialog onAdd={handleAdd} />
 
-          <Button onClick={onSave} disabled={saving} className="w-full rounded-xl py-3 text-sm font-bold">
+          <ConfirmDialog
+            open={confirmSave}
+            title="Guardar registro"
+            description={`¿Confirmás guardar el entreno de hoy con ${exercises.length} ejercicios y ${totalSets} series?`}
+            confirmLabel="Guardar"
+            confirmVariant="default"
+            onConfirm={() => {
+              setConfirmSave(false);
+              onSave();
+            }}
+            onCancel={() => setConfirmSave(false)}
+          />
+
+          <Button
+            onClick={() => setConfirmSave(true)}
+            disabled={saving}
+            className="w-full rounded-xl py-3 text-sm font-bold"
+          >
             {saving ? "Guardando..." : "Guardar registro"}
           </Button>
         </>

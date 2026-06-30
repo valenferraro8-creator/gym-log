@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase";
 import type { ExerciseEntry } from "@/data/mock";
 
+export type PreviousSets = Record<string, string[]>;
+
 export async function saveWorkoutSession(
   userId: string,
   exercises: ExerciseEntry[],
@@ -48,26 +50,30 @@ export async function saveWorkoutSession(
   return session;
 }
 
-/** Returns a map of exerciseName → "Xkg x Y" for the "Anterior" column */
+/**
+ * Returns a map of exerciseName → list of "Xkg x Y" strings, one per set_number
+ * (index 0 = set 1, index 1 = set 2, ...), taken from the last completed session
+ * that included that exercise. Used so each set in the "Anterior" column is
+ * compared against its own equivalent set from last time, not just the first one.
+ */
 export async function loadLastSets(
   userId: string,
   exerciseNames: string[]
-): Promise<Record<string, string>> {
+): Promise<PreviousSets> {
   if (exerciseNames.length === 0) return {};
 
   const { data } = await supabase
-    .from("last_set_per_exercise")
-    .select("exercise_name, weight_kg, reps")
+    .from("last_session_sets_per_exercise")
+    .select("exercise_name, set_number, weight_kg, reps")
     .eq("user_id", userId)
     .in("exercise_name", exerciseNames);
 
-  const map: Record<string, string> = {};
+  const map: PreviousSets = {};
   for (const row of data ?? []) {
-    if (!row.exercise_name) continue;
-    map[row.exercise_name] =
-      row.weight_kg != null && row.reps != null
-        ? `${row.weight_kg}kg x ${row.reps}`
-        : "—";
+    if (!row.exercise_name || row.set_number == null) continue;
+    const list = (map[row.exercise_name] ??= []);
+    list[row.set_number - 1] =
+      row.weight_kg != null && row.reps != null ? `${row.weight_kg}kg x ${row.reps}` : "—";
   }
   return map;
 }

@@ -135,3 +135,33 @@ join public.session_exercises se on se.id = ss.session_exercise_id
 join public.workout_sessions s   on s.id = se.session_id
 where ss.done = true and s.finished_at is not null
 order by s.user_id, se.exercise_name, s.finished_at desc;
+
+-- ================================================================
+-- Vista: todas las series de la última sesión completada por ejercicio
+-- Usada para comparar cada serie de hoy con su serie equivalente
+-- (mismo set_number) de la vez anterior, en vez de comparar todo
+-- contra una sola serie.
+-- ================================================================
+create or replace view public.last_session_sets_per_exercise as
+select
+  s.user_id,
+  se.exercise_name,
+  ss.set_number,
+  ss.weight_kg,
+  ss.reps
+from public.session_sets ss
+join public.session_exercises se on se.id = ss.session_exercise_id
+join public.workout_sessions s   on s.id = se.session_id
+where ss.done = true
+  and s.finished_at is not null
+  and s.id = (
+    select s2.id
+    from public.session_exercises se2
+    join public.workout_sessions s2 on s2.id = se2.session_id
+    where se2.exercise_name = se.exercise_name
+      and s2.user_id = s.user_id
+      and s2.finished_at is not null
+    order by s2.finished_at desc
+    limit 1
+  )
+order by s.user_id, se.exercise_name, ss.set_number;

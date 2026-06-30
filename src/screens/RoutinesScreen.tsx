@@ -5,9 +5,27 @@ import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/IconButton";
 import { EmptyState } from "@/components/EmptyState";
 import { ExerciseInfoDialog } from "@/components/ExerciseInfoDialog";
+import { RoutineEditDialog } from "@/components/RoutineEditDialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import type { Routine } from "@/data/mock";
+import type { RoutineExerciseInput } from "@/hooks/useRoutines";
 
-function RoutineCard({ r, onUseRoutine }: { r: Routine; onUseRoutine: (r: Routine) => void }) {
+function RoutineCard({
+  r,
+  onUseRoutine,
+  onUpdate,
+  onDelete,
+}: {
+  r: Routine;
+  onUseRoutine: (r: Routine) => void;
+  onUpdate: (id: string, name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
   const [open, setOpen] = useState(false);
   const previewNames = r.exercises.slice(0, 3).map((e) => e.name).join(", ");
   const remaining = r.exercises.length - 3;
@@ -26,7 +44,21 @@ function RoutineCard({ r, onUseRoutine }: { r: Routine; onUseRoutine: (r: Routin
             {remaining > 0 && !open && <span className="font-semibold text-primary"> +{remaining} más</span>}
           </p>
         </button>
-        <IconButton icon={MoreVertical} label="Más opciones de la rutina" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <IconButton icon={MoreVertical} label="Más opciones de la rutina" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="rounded-xl border-border bg-card">
+            <DropdownMenuItem
+              onClick={() => {
+                if (window.confirm(`¿Eliminar la rutina "${r.name}"?`)) onDelete(r.id);
+              }}
+              className="text-destructive focus:text-destructive"
+            >
+              Eliminar rutina
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {open && (
@@ -46,9 +78,15 @@ function RoutineCard({ r, onUseRoutine }: { r: Routine; onUseRoutine: (r: Routin
       )}
 
       <div className="mt-3.5 flex gap-2">
-        <Button variant="secondary" className="flex-1 rounded-xl text-sm font-semibold">
-          Editar
-        </Button>
+        <RoutineEditDialog
+          initial={r}
+          onSave={(name, tag, exercises) => onUpdate(r.id, name, tag, exercises)}
+          trigger={
+            <Button variant="secondary" className="flex-1 rounded-xl text-sm font-semibold">
+              Editar
+            </Button>
+          }
+        />
         <Button onClick={() => onUseRoutine(r)} className="flex-1 rounded-xl text-sm font-semibold">
           Usar hoy
         </Button>
@@ -60,17 +98,28 @@ function RoutineCard({ r, onUseRoutine }: { r: Routine; onUseRoutine: (r: Routin
 export function RoutinesScreen({
   routines,
   onUseRoutine,
+  onCreate,
+  onUpdate,
+  onDelete,
 }: {
   routines: Routine[];
   onUseRoutine: (r: Routine) => void;
+  onCreate: (name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
+  onUpdate: (id: string, name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
+  onDelete: (id: string) => void;
 }) {
   return (
     <div className="pb-4">
       <TopBar title="Rutinas" subtitle={`${routines.length} rutinas guardadas`} />
 
-      <button className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm font-bold text-primary">
-        <Plus size={16} /> Crear rutina
-      </button>
+      <RoutineEditDialog
+        onSave={onCreate}
+        trigger={
+          <button className="mb-4 flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-border py-3 text-sm font-bold text-primary">
+            <Plus size={16} /> Crear rutina
+          </button>
+        }
+      />
 
       {routines.length === 0 ? (
         <EmptyState
@@ -82,7 +131,7 @@ export function RoutinesScreen({
         <div className="space-y-3">
           {routines.map((r, i) => (
             <div key={r.id} className="stagger-item" style={{ "--stagger-delay": `${i * 50}ms` } as CSSProperties}>
-              <RoutineCard r={r} onUseRoutine={onUseRoutine} />
+              <RoutineCard r={r} onUseRoutine={onUseRoutine} onUpdate={onUpdate} onDelete={onDelete} />
             </div>
           ))}
         </div>

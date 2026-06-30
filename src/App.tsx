@@ -37,7 +37,7 @@ function loadSaved(): { exercises: ExerciseEntry[]; routineName: string } | null
 
 function App() {
   const { user, loading: authLoading } = useAuth();
-  const { routines } = useRoutines(user);
+  const { routines, create: createRoutine, update: updateRoutine, remove: removeRoutine } = useRoutines(user);
 
   const [tab, setTab] = useState<Tab>("workout");
   const saved = loadSaved();
@@ -126,7 +126,13 @@ function App() {
                 />
               )}
               {tab === "routines" && (
-                <RoutinesScreen routines={routines} onUseRoutine={handleUseRoutine} />
+                <RoutinesScreen
+                  routines={routines}
+                  onUseRoutine={handleUseRoutine}
+                  onCreate={createRoutine}
+                  onUpdate={updateRoutine}
+                  onDelete={removeRoutine}
+                />
               )}
               {tab === "progress" && <ProgressScreen />}
             </div>

@@ -65,10 +65,10 @@ export function AuthScreen() {
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
-            placeholder="Código de 6 dígitos"
+            placeholder="Código del email"
             inputMode="numeric"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={10}
             required
             className="h-12 w-full rounded-xl border border-border bg-secondary px-4 text-center text-lg tracking-[0.3em] text-foreground placeholder:tracking-normal placeholder:text-muted-foreground outline-none focus:border-primary"
           />

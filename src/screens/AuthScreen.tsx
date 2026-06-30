@@ -21,7 +21,7 @@ export function AuthScreen() {
     });
 
     if (err) {
-      setError("No se pudo enviar el link. Verificá el email e intentá de nuevo.");
+      setError(err.message || "No se pudo enviar el link. Verificá el email e intentá de nuevo.");
     } else {
       setSent(true);
     }

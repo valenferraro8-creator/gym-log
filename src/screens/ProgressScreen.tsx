@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { format, parseISO } from "date-fns";
+import { es } from "date-fns/locale";
 import { Area, AreaChart, Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { LineChart, Plus, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { History, LineChart, Plus, Target, Trash2, TrendingDown, TrendingUp } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { SignOutButton } from "@/components/SignOutButton";
 import { MuscleBody } from "@/components/MuscleBody";
@@ -9,11 +11,14 @@ import { GoalEditDialog } from "@/components/GoalEditDialog";
 import { IconButton } from "@/components/IconButton";
 import { HeroStat } from "@/components/HeroStat";
 import { EmptyState } from "@/components/EmptyState";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useProgressData } from "@/hooks/useProgressData";
 import { useGoals, type GoalRecord, type NewGoal } from "@/hooks/useGoals";
 import { useExerciseBest } from "@/hooks/useExerciseBest";
+import { useSessionHistory, type HistorySession } from "@/hooks/useSessionHistory";
 import { loadBestWeights } from "@/hooks/useWorkout";
 import {
   bestWeightEver,
@@ -28,9 +33,9 @@ import {
 } from "@/lib/progressData";
 import { computeWeeklyMuscleIntensity, daysSinceMuscleGroupTrained } from "@/lib/muscleVolume";
 import { knownExercises } from "@/data/exerciseLibrary";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeDecimal, sanitizeInt } from "@/lib/utils";
 
-type SubTab = "ejercicio" | "semanal" | "calendario" | "musculos";
+type SubTab = "ejercicio" | "semanal" | "calendario" | "musculos" | "historial";
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
@@ -411,16 +416,219 @@ function MusclesTab({ sessions }: { sessions: SessionRow[] }) {
   );
 }
 
+function HistorySessionCard({
+  session,
+  onSaveSets,
+  onDelete,
+}: {
+  session: HistorySession;
+  onSaveSets: (updates: { id: string; weightKg: number | null; reps: number | null }[]) => Promise<void>;
+  onDelete: () => Promise<void>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [edits, setEdits] = useState<Record<string, { weight: string; reps: string }>>({});
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const totalSets = session.exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+  const dateLabel = useMemo(() => {
+    const label = format(parseISO(session.finishedAt), "d MMM yyyy", { locale: es });
+    return label.charAt(0).toUpperCase() + label.slice(1);
+  }, [session.finishedAt]);
+  const previewNames = session.exercises.slice(0, 3).map((e) => e.name).join(", ");
+  const remaining = session.exercises.length - 3;
+
+  useEffect(() => {
+    if (!open) return;
+    const init: Record<string, { weight: string; reps: string }> = {};
+    for (const ex of session.exercises) {
+      for (const s of ex.sets) {
+        init[s.id] = { weight: s.weightKg?.toString() ?? "", reps: s.reps?.toString() ?? "" };
+      }
+    }
+    setEdits(init);
+    setError(null);
+  }, [open, session]);
+
+  function setField(setId: string, field: "weight" | "reps", value: string) {
+    setEdits((prev) => ({ ...prev, [setId]: { ...prev[setId], [field]: value } }));
+  }
+
+  function isChanged(setId: string, original: { weightKg: number | null; reps: number | null }) {
+    const e = edits[setId];
+    if (!e) return false;
+    return e.weight !== (original.weightKg?.toString() ?? "") || e.reps !== (original.reps?.toString() ?? "");
+  }
+
+  const hasChanges = session.exercises.some((ex) => ex.sets.some((s) => isChanged(s.id, s)));
+
+  async function handleSaveChanges() {
+    setSaving(true);
+    setError(null);
+    try {
+      const updates: { id: string; weightKg: number | null; reps: number | null }[] = [];
+      for (const ex of session.exercises) {
+        for (const s of ex.sets) {
+          if (!isChanged(s.id, s)) continue;
+          const e = edits[s.id];
+          updates.push({
+            id: s.id,
+            weightKg: e.weight.trim() === "" ? null : parseFloat(e.weight),
+            reps: e.reps.trim() === "" ? null : parseInt(e.reps, 10),
+          });
+        }
+      }
+      await onSaveSets(updates);
+    } catch (e) {
+      console.error("Error updating session:", e);
+      setError("No se pudieron guardar los cambios. Probá de nuevo.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    setConfirmDelete(false);
+    setDeleteError(null);
+    try {
+      await onDelete();
+    } catch (e) {
+      console.error("Error deleting session:", e);
+      setDeleteError("No se pudo eliminar el entreno. Probá de nuevo.");
+    }
+  }
+
+  return (
+    <div className="shadow-card card-interactive rounded-2xl border border-border bg-card-flat p-4">
+      <div className="flex items-start justify-between gap-2">
+        <button onClick={() => setOpen((o) => !o)} className="flex-1 text-left">
+          <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">{dateLabel}</p>
+          <h3 className="font-display text-lg font-bold leading-tight text-foreground">{session.name}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {session.exercises.length} ejercicios · {totalSets} series
+          </p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            {previewNames}
+            {remaining > 0 && !open && <span className="font-semibold text-primary"> +{remaining} más</span>}
+          </p>
+        </button>
+        <IconButton
+          icon={Trash2}
+          label="Eliminar entreno"
+          onClick={() => setConfirmDelete(true)}
+          className="text-muted-foreground hover:text-destructive"
+        />
+      </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Eliminar entreno"
+        description={`¿Seguro que querés eliminar el entreno "${session.name}" del ${dateLabel}? Esta acción no se puede deshacer.`}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
+      {deleteError && <p className="mt-2 text-xs font-medium text-destructive">{deleteError}</p>}
+
+      {open && (
+        <div className="mt-3 space-y-3 border-t border-border pt-3">
+          {session.exercises.map((ex) => (
+            <div key={ex.id}>
+              <p className="mb-1.5 text-xs font-bold text-foreground">{ex.name}</p>
+              <div className="space-y-1">
+                {ex.sets.map((s, i) => (
+                  <div key={s.id} className="grid grid-cols-[20px_1fr_1fr] items-center gap-2">
+                    <span className="text-center font-mono text-[11px] font-bold text-muted-foreground">
+                      {s.isDropset ? "↳" : i + 1}
+                    </span>
+                    <input
+                      value={edits[s.id]?.weight ?? ""}
+                      onChange={(e) => setField(s.id, "weight", sanitizeDecimal(e.target.value))}
+                      inputMode="decimal"
+                      placeholder="0"
+                      className="h-8 rounded-md border border-border bg-secondary text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
+                    />
+                    <input
+                      value={edits[s.id]?.reps ?? ""}
+                      onChange={(e) => setField(s.id, "reps", sanitizeInt(e.target.value))}
+                      inputMode="numeric"
+                      placeholder="0"
+                      className="h-8 rounded-md border border-border bg-secondary text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+
+          {error && <p className="text-xs font-medium text-destructive">{error}</p>}
+
+          <Button
+            onClick={handleSaveChanges}
+            disabled={!hasChanges || saving}
+            variant="secondary"
+            className="w-full rounded-xl text-xs font-bold"
+          >
+            {saving ? "Guardando..." : "Guardar cambios"}
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function HistoryTab({
+  sessions,
+  loading,
+  onSaveSets,
+  onDelete,
+}: {
+  sessions: HistorySession[];
+  loading: boolean;
+  onSaveSets: (updates: { id: string; weightKg: number | null; reps: number | null }[]) => Promise<void>;
+  onDelete: (sessionId: string) => Promise<void>;
+}) {
+  if (loading) {
+    return (
+      <div className="grid place-items-center py-16">
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
+      </div>
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <EmptyState
+        icon={History}
+        title="Sin entrenos guardados todavía"
+        description="Los entrenos que guardes desde Registro van a aparecer acá, con la opción de editarlos o borrarlos."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {sessions.map((s) => (
+        <HistorySessionCard key={s.id} session={s} onSaveSets={onSaveSets} onDelete={() => onDelete(s.id)} />
+      ))}
+    </div>
+  );
+}
+
 export function ProgressScreen({ customExerciseNames = [] }: { customExerciseNames?: string[] }) {
   const { user } = useAuth();
   const { sessions, loading: sessionsLoading } = useProgressData(user);
   const { goals, create: createGoal, remove: removeGoal } = useGoals(user);
+  const { sessions: history, loading: historyLoading, updateSets: updateHistorySets, remove: removeHistorySession } =
+    useSessionHistory(user);
   const [tab, setTab] = useState<SubTab>("ejercicio");
   const tabs: { id: SubTab; label: string }[] = [
     { id: "ejercicio", label: "Ejercicio" },
     { id: "semanal", label: "Semanal" },
     { id: "calendario", label: "Calendario" },
     { id: "musculos", label: "Músculos" },
+    { id: "historial", label: "Historial" },
   ];
 
   if (sessionsLoading) {
@@ -466,13 +674,13 @@ export function ProgressScreen({ customExerciseNames = [] }: { customExerciseNam
         onDelete={removeGoal}
       />
 
-      <div className="mb-4 flex gap-1 rounded-xl bg-secondary p-1">
+      <div className="no-scrollbar mb-4 flex gap-1 overflow-x-auto rounded-xl bg-secondary p-1">
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex-1 rounded-lg py-2 text-xs font-bold transition-colors",
+              "shrink-0 rounded-lg px-3 py-2 text-xs font-bold transition-colors",
               tab === t.id ? "bg-primary text-primary-foreground" : "text-muted-foreground"
             )}
           >
@@ -485,6 +693,14 @@ export function ProgressScreen({ customExerciseNames = [] }: { customExerciseNam
       {tab === "semanal" && <WeeklyTab sessions={sessions} />}
       {tab === "calendario" && <CalendarTab sessions={sessions} />}
       {tab === "musculos" && <MusclesTab sessions={sessions} />}
+      {tab === "historial" && (
+        <HistoryTab
+          sessions={history}
+          loading={historyLoading}
+          onSaveSets={updateHistorySets}
+          onDelete={removeHistorySession}
+        />
+      )}
     </div>
   );
 }

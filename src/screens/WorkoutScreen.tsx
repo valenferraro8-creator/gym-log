@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Check, Dumbbell, MoreHorizontal, Plus, Undo2, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Dumbbell, MoreHorizontal, Plus, Undo2, Zap } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/IconButton";
@@ -9,6 +9,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { ExerciseInfoDialog } from "@/components/ExerciseInfoDialog";
 import { AddExerciseDialog, type NewExercise } from "@/components/AddExerciseDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { RestTimerBar } from "@/components/RestTimerBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,20 +18,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { getPrimaryMuscleLabel, type ExerciseMedia } from "@/data/exerciseLibrary";
 import type { DropSet, ExerciseEntry } from "@/data/mock";
-import { cn } from "@/lib/utils";
-
-/** Keeps only digits and a single decimal point, so weight can never end up as unparseable garbage. */
-function sanitizeDecimal(value: string): string {
-  const cleaned = value.replace(/[^\d.]/g, "");
-  const firstDot = cleaned.indexOf(".");
-  if (firstDot === -1) return cleaned;
-  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
-}
-
-/** Keeps only digits, so reps can never end up as unparseable garbage. */
-function sanitizeInt(value: string): string {
-  return value.replace(/\D/g, "");
-}
+import { cn, sanitizeDecimal, sanitizeInt } from "@/lib/utils";
 
 function DropRow({
   index,
@@ -413,6 +401,7 @@ export function WorkoutScreen({
   setExercises,
   routineName,
   onSave,
+  onDiscard,
   saving = false,
   saveError = null,
   routineSyncError = null,
@@ -426,6 +415,7 @@ export function WorkoutScreen({
   setExercises: React.Dispatch<React.SetStateAction<ExerciseEntry[]>>;
   routineName: string;
   onSave: () => void;
+  onDiscard?: () => void;
   saving?: boolean;
   saveError?: string | null;
   routineSyncError?: string | null;
@@ -439,6 +429,8 @@ export function WorkoutScreen({
   const groups = groupExercises(exercises);
   const totalSets = exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
   const [confirmSave, setConfirmSave] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [restStartSignal, setRestStartSignal] = useState(0);
 
   function updateSet(exId: string, setId: string, patch: Partial<ExerciseEntry["sets"][number]>) {
     setExercises((prev) =>
@@ -449,6 +441,8 @@ export function WorkoutScreen({
   }
 
   function toggleSetDone(exId: string, setId: string) {
+    const wasDone = exercises.find((ex) => ex.id === exId)?.sets.find((s) => s.id === setId)?.done;
+    if (!wasDone) setRestStartSignal((n) => n + 1);
     setExercises((prev) =>
       prev.map((ex) =>
         ex.id !== exId ? ex : { ...ex, sets: ex.sets.map((s) => (s.id === setId ? { ...s, done: !s.done } : s)) }
@@ -474,6 +468,17 @@ export function WorkoutScreen({
 
   function removeExercise(exId: string) {
     setExercises((prev) => prev.filter((ex) => ex.id !== exId));
+  }
+
+  function moveGroup(groupIndex: number, direction: -1 | 1) {
+    setExercises((prev) => {
+      const currentGroups = groupExercises(prev);
+      const target = groupIndex + direction;
+      if (target < 0 || target >= currentGroups.length) return prev;
+      const reordered = [...currentGroups];
+      [reordered[groupIndex], reordered[target]] = [reordered[target], reordered[groupIndex]];
+      return reordered.flatMap((g) => g.exercises);
+    });
   }
 
   function addToSuperset(exIdA: string, exIdB: string) {
@@ -539,6 +544,11 @@ export function WorkoutScreen({
   }
 
   function toggleDropDone(exId: string, setId: string, dropId: string) {
+    const wasDone = exercises
+      .find((ex) => ex.id === exId)
+      ?.sets.find((s) => s.id === setId)
+      ?.drops?.find((d) => d.id === dropId)?.done;
+    if (!wasDone) setRestStartSignal((n) => n + 1);
     setExercises((prev) =>
       prev.map((ex) =>
         ex.id !== exId
@@ -609,6 +619,24 @@ export function WorkoutScreen({
           <div className="space-y-3">
             {groups.map((g, i) => (
               <div key={i} className="stagger-item" style={{ "--stagger-delay": `${i * 50}ms` } as CSSProperties}>
+                {groups.length > 1 && (
+                  <div className="mb-1 flex justify-end gap-1">
+                    <IconButton
+                      icon={ChevronUp}
+                      label="Mover ejercicio arriba"
+                      onClick={() => moveGroup(i, -1)}
+                      disabled={i === 0}
+                      className="h-6 w-6 disabled:opacity-20"
+                    />
+                    <IconButton
+                      icon={ChevronDown}
+                      label="Mover ejercicio abajo"
+                      onClick={() => moveGroup(i, 1)}
+                      disabled={i === groups.length - 1}
+                      className="h-6 w-6 disabled:opacity-20"
+                    />
+                  </div>
+                )}
                 {g.type === "superset" ? (
                   <SupersetGroup
                     exercises={g.exercises}
@@ -651,6 +679,8 @@ export function WorkoutScreen({
             ))}
           </div>
 
+          <RestTimerBar startSignal={restStartSignal} />
+
           <AddExerciseDialog
             onAdd={handleAdd}
             customNames={customExerciseNames}
@@ -670,19 +700,45 @@ export function WorkoutScreen({
             onCancel={() => setConfirmSave(false)}
           />
 
+          {onDiscard && (
+            <ConfirmDialog
+              open={confirmDiscard}
+              title="Descartar registro"
+              description="¿Seguro que querés descartar el entreno de hoy? Se van a borrar todos los ejercicios y series sin guardar."
+              confirmLabel="Descartar"
+              onConfirm={() => {
+                setConfirmDiscard(false);
+                onDiscard();
+              }}
+              onCancel={() => setConfirmDiscard(false)}
+            />
+          )}
+
           {saveError && (
             <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
               {saveError}
             </p>
           )}
 
-          <Button
-            onClick={() => setConfirmSave(true)}
-            disabled={saving}
-            className="w-full rounded-xl py-3 text-sm font-bold"
-          >
-            {saving ? "Guardando..." : saveError ? "Reintentar guardar" : "Guardar registro"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setConfirmSave(true)}
+              disabled={saving}
+              className="flex-1 rounded-xl py-3 text-sm font-bold"
+            >
+              {saving ? "Guardando..." : saveError ? "Reintentar guardar" : "Guardar registro"}
+            </Button>
+            {onDiscard && (
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmDiscard(true)}
+                disabled={saving}
+                className="rounded-xl px-4 py-3 text-sm font-bold text-destructive"
+              >
+                Descartar
+              </Button>
+            )}
+          </div>
         </>
       )}
     </div>

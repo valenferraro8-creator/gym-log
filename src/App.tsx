@@ -201,6 +201,15 @@ function App() {
     }
   }
 
+  function handleDiscardWorkout() {
+    clearUndoTimer();
+    setLastSaved(null);
+    localStorage.removeItem(STORAGE_KEY);
+    setExercises([]);
+    setActiveRoutineName("");
+    setActiveRoutineId("");
+  }
+
   async function handleUndoSave() {
     if (!lastSaved) return;
     clearUndoTimer();
@@ -249,6 +258,7 @@ function App() {
                   setExercises={setExercises}
                   routineName={activeRoutineName}
                   onSave={handleSaveWorkout}
+                  onDiscard={handleDiscardWorkout}
                   saving={saving}
                   saveError={saveError}
                   routineSyncError={activeRoutineId ? routineSyncError : null}

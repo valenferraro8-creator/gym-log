@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,16 @@ export function RoutineEditDialog({
     setRows((prev) => prev.filter((r) => r.key !== key));
   }
 
+  function moveRow(index: number, direction: -1 | 1) {
+    setRows((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   const validRows = rows.filter((r) => r.name.trim().length > 0);
   const canSave = name.trim().length > 0 && validRows.length > 0 && !saving;
 
@@ -104,8 +114,28 @@ export function RoutineEditDialog({
         />
 
         <div className="max-h-72 space-y-2 overflow-y-auto">
-          {rows.map((row) => (
-            <div key={row.key} className="grid grid-cols-[1fr_44px_56px_28px] items-center gap-1.5">
+          {rows.map((row, idx) => (
+            <div key={row.key} className="grid grid-cols-[18px_1fr_44px_56px_28px] items-center gap-1.5">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveRow(idx, -1)}
+                  disabled={idx === 0}
+                  aria-label="Mover ejercicio arriba"
+                  className="text-muted-foreground disabled:opacity-20"
+                >
+                  <ChevronUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveRow(idx, 1)}
+                  disabled={idx === rows.length - 1}
+                  aria-label="Mover ejercicio abajo"
+                  className="text-muted-foreground disabled:opacity-20"
+                >
+                  <ChevronDown size={13} />
+                </button>
+              </div>
               <Input
                 value={row.name}
                 onChange={(e) => updateRow(row.key, { name: e.target.value })}

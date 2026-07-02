@@ -7,6 +7,11 @@ export type PreviousSets = Record<string, string[]>;
  * Saves a finished workout to Supabase. Throws on any failed insert instead of
  * swallowing it, so the caller can keep the local draft around and let the user
  * retry — a workout is only cleared from local state once it's actually saved.
+ *
+ * Batches the exercise/set inserts into a handful of round trips (one per
+ * table) instead of a couple of sequential calls per exercise — a workout
+ * with 8 exercises used to mean 15+ back-to-back requests, which was slow on
+ * a flaky gym wifi/data connection right when the user wants to save and go.
  */
 export async function saveWorkoutSession(
   userId: string,
@@ -36,32 +41,38 @@ export async function saveWorkoutSession(
     exercises.map((ex) => ex.name)
   );
 
-  for (let i = 0; i < exercises.length; i++) {
-    const ex = exercises[i];
-
-    const { data: sessionEx, error: exError } = await supabase
-      .from("session_exercises")
-      .insert({
+  // 1. Insert every exercise in one call, tagged with its position so the
+  // returned ids can be matched back without relying on row order.
+  const { data: insertedExercises, error: exError } = await supabase
+    .from("session_exercises")
+    .insert(
+      exercises.map((ex, i) => ({
         session_id: session.id,
         exercise_name: ex.name,
         superset_group: ex.supersetGroup ?? null,
         position: i,
-      })
-      .select()
-      .single();
+      }))
+    )
+    .select("id, position");
 
-    if (exError || !sessionEx) throw exError ?? new Error(`Failed to save exercise "${ex.name}"`);
+  if (exError || !insertedExercises) throw exError ?? new Error("Failed to save exercises");
+
+  const exerciseIdByPosition = new Map(insertedExercises.map((r) => [r.position, r.id]));
+
+  // 2. Build every "main" set row across all exercises up front, then insert once.
+  const mainRowsByExercise = exercises.map((ex, i) => {
+    const sessionExerciseId = exerciseIdByPosition.get(i);
+    if (!sessionExerciseId) throw new Error(`Failed to save exercise "${ex.name}"`);
 
     const doneSets = ex.sets.filter((s) => s.done && (s.weight !== "" || s.reps !== ""));
-    if (doneSets.length === 0) continue;
-
     let setNumber = 0;
-    const mainRows = doneSets.map((s) => {
+    return doneSets.map((s) => {
       const weight_kg = s.weight !== "" ? parseFloat(s.weight) : null;
       const priorBest = bestWeights[ex.name] ?? 0;
       const is_pr = weight_kg != null && priorBest > 0 && weight_kg > priorBest;
       if (weight_kg != null && weight_kg > priorBest) bestWeights[ex.name] = weight_kg;
       return {
+        session_exercise_id: sessionExerciseId,
         set_number: ++setNumber,
         weight_kg,
         reps: s.reps !== "" ? parseInt(s.reps, 10) : null,
@@ -69,21 +80,33 @@ export async function saveWorkoutSession(
         done: true,
       };
     });
+  });
 
-    const { data: insertedSets, error: setsError } = await supabase
+  const allMainRows = mainRowsByExercise.flat();
+  let insertedMainSets: { id: string; session_exercise_id: string; set_number: number }[] = [];
+  if (allMainRows.length > 0) {
+    const { data, error: setsError } = await supabase
       .from("session_sets")
-      .insert(mainRows.map((r) => ({ session_exercise_id: sessionEx.id, ...r })))
-      .select("id, set_number");
+      .insert(allMainRows)
+      .select("id, session_exercise_id, set_number");
+    if (setsError || !data) throw setsError ?? new Error("Failed to save sets");
+    insertedMainSets = data;
+  }
 
-    if (setsError || !insertedSets) throw setsError ?? new Error(`Failed to save sets for "${ex.name}"`);
+  const idByExAndSetNumber = new Map(insertedMainSets.map((r) => [`${r.session_exercise_id}:${r.set_number}`, r.id]));
 
-    const idBySetNumber = new Map(insertedSets.map((r) => [r.set_number, r.id]));
+  // 3. Build every dropset row across all exercises, then insert once.
+  const allDropRows = exercises.flatMap((ex, i) => {
+    const sessionExerciseId = exerciseIdByPosition.get(i)!;
+    const doneSets = ex.sets.filter((s) => s.done && (s.weight !== "" || s.reps !== ""));
+    const rowsForEx = mainRowsByExercise[i];
+    let setNumber = rowsForEx.length;
 
-    const dropRows = doneSets.flatMap((s, idx) => {
-      const parentId = idBySetNumber.get(mainRows[idx].set_number);
+    return doneSets.flatMap((s, idx) => {
+      const parentId = idByExAndSetNumber.get(`${sessionExerciseId}:${rowsForEx[idx].set_number}`);
       const doneDrops = (s.drops ?? []).filter((d) => d.done && (d.weight !== "" || d.reps !== ""));
       return doneDrops.map((d) => ({
-        session_exercise_id: sessionEx.id,
+        session_exercise_id: sessionExerciseId,
         set_number: ++setNumber,
         weight_kg: d.weight !== "" ? parseFloat(d.weight) : null,
         reps: d.reps !== "" ? parseInt(d.reps, 10) : null,
@@ -92,11 +115,11 @@ export async function saveWorkoutSession(
         done: true,
       }));
     });
+  });
 
-    if (dropRows.length > 0) {
-      const { error: dropsError } = await supabase.from("session_sets").insert(dropRows);
-      if (dropsError) throw dropsError;
-    }
+  if (allDropRows.length > 0) {
+    const { error: dropsError } = await supabase.from("session_sets").insert(allDropRows);
+    if (dropsError) throw dropsError;
   }
 
   return session;

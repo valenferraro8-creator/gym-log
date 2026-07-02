@@ -52,7 +52,10 @@ export interface Database {
         Row: { user_id: string | null; exercise_name: string | null; set_number: number | null; weight_kg: number | null; reps: number | null };
       };
       best_weight_per_exercise: {
-        Row: { user_id: string | null; exercise_name: string | null; best_weight_kg: number | null };
+        Row: { user_id: string | null; exercise_name: string | null; best_weight_kg: number | null; reps: number | null };
+      };
+      best_est_1rm_per_exercise: {
+        Row: { user_id: string | null; exercise_name: string | null; weight_kg: number | null; reps: number | null; est_1rm: number | null };
       };
     };
     Functions: Record<string, never>;

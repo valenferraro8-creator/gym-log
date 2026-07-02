@@ -12,12 +12,16 @@ export function useRoutines(user: User | null) {
   const load = useCallback(async () => {
     if (!user) return;
 
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("routines")
       .select("*, routine_exercises(*)")
       .order("created_at");
 
-    if (data) setRoutines(data.map(mapRoutine));
+    if (error) {
+      console.error("Error loading routines:", error);
+    } else if (data) {
+      setRoutines(data.map(mapRoutine));
+    }
     setLoading(false);
   }, [user]);
 
@@ -33,10 +37,10 @@ export function useRoutines(user: User | null) {
         .insert({ user_id: user.id, name, tag })
         .select()
         .single();
-      if (error || !routine) throw error;
+      if (error || !routine) throw error ?? new Error("Failed to create routine");
 
       if (exercises.length > 0) {
-        await supabase.from("routine_exercises").insert(
+        const { error: exError } = await supabase.from("routine_exercises").insert(
           exercises.map((ex, i) => ({
             routine_id: routine.id,
             exercise_name: ex.name,
@@ -45,6 +49,7 @@ export function useRoutines(user: User | null) {
             position: i,
           }))
         );
+        if (exError) throw exError;
       }
       await load();
     },
@@ -53,10 +58,14 @@ export function useRoutines(user: User | null) {
 
   const update = useCallback(
     async (routineId: string, name: string, tag: string, exercises: RoutineExerciseInput[]) => {
-      await supabase.from("routines").update({ name, tag }).eq("id", routineId);
-      await supabase.from("routine_exercises").delete().eq("routine_id", routineId);
+      const { error: nameError } = await supabase.from("routines").update({ name, tag }).eq("id", routineId);
+      if (nameError) throw nameError;
+
+      const { error: deleteError } = await supabase.from("routine_exercises").delete().eq("routine_id", routineId);
+      if (deleteError) throw deleteError;
+
       if (exercises.length > 0) {
-        await supabase.from("routine_exercises").insert(
+        const { error: insertError } = await supabase.from("routine_exercises").insert(
           exercises.map((ex, i) => ({
             routine_id: routineId,
             exercise_name: ex.name,
@@ -65,6 +74,7 @@ export function useRoutines(user: User | null) {
             position: i,
           }))
         );
+        if (insertError) throw insertError;
       }
       await load();
     },
@@ -73,7 +83,8 @@ export function useRoutines(user: User | null) {
 
   const remove = useCallback(
     async (routineId: string) => {
-      await supabase.from("routines").delete().eq("id", routineId);
+      const { error } = await supabase.from("routines").delete().eq("id", routineId);
+      if (error) throw error;
       await load();
     },
     [load]

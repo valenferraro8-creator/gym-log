@@ -19,6 +19,19 @@ import { getPrimaryMuscleLabel, type ExerciseMedia } from "@/data/exerciseLibrar
 import type { DropSet, ExerciseEntry } from "@/data/mock";
 import { cn } from "@/lib/utils";
 
+/** Keeps only digits and a single decimal point, so weight can never end up as unparseable garbage. */
+function sanitizeDecimal(value: string): string {
+  const cleaned = value.replace(/[^\d.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
+}
+
+/** Keeps only digits, so reps can never end up as unparseable garbage. */
+function sanitizeInt(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
 function DropRow({
   index,
   drop,
@@ -43,14 +56,14 @@ function DropRow({
       <span className="min-w-0 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">Drop</span>
       <input
         value={drop.weight}
-        onChange={(e) => onChangeWeight(e.target.value)}
+        onChange={(e) => onChangeWeight(sanitizeDecimal(e.target.value))}
         placeholder="0"
         inputMode="decimal"
         className="font-tabular h-7 min-w-0 w-full rounded-md border border-border/70 bg-secondary/60 text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
       />
       <input
         value={drop.reps}
-        onChange={(e) => onChangeReps(e.target.value)}
+        onChange={(e) => onChangeReps(sanitizeInt(e.target.value))}
         placeholder="0"
         inputMode="numeric"
         className="font-tabular h-7 min-w-0 w-full rounded-md border border-border/70 bg-secondary/60 text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
@@ -137,14 +150,14 @@ function SetRow({
         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">{set.previous}</span>
         <input
           value={set.weight}
-          onChange={(e) => onChangeWeight(e.target.value)}
+          onChange={(e) => onChangeWeight(sanitizeDecimal(e.target.value))}
           placeholder="0"
           inputMode="decimal"
           className="font-hero h-9 min-w-0 w-full rounded-md border border-border bg-secondary text-center text-base font-black text-foreground outline-none focus:border-primary"
         />
         <input
           value={set.reps}
-          onChange={(e) => onChangeReps(e.target.value)}
+          onChange={(e) => onChangeReps(sanitizeInt(e.target.value))}
           placeholder="0"
           inputMode="numeric"
           className="font-hero h-9 min-w-0 w-full rounded-md border border-border bg-secondary text-center text-base font-black text-foreground outline-none focus:border-primary"
@@ -402,6 +415,7 @@ export function WorkoutScreen({
   onSave,
   saving = false,
   saveError = null,
+  routineSyncError = null,
   canUndo = false,
   onUndo,
   customExerciseNames = [],
@@ -414,6 +428,7 @@ export function WorkoutScreen({
   onSave: () => void;
   saving?: boolean;
   saveError?: string | null;
+  routineSyncError?: string | null;
   canUndo?: boolean;
   onUndo?: () => void;
   customExerciseNames?: string[];
@@ -586,6 +601,10 @@ export function WorkoutScreen({
               {exercises.length} ejercicios · {totalSets} series
             </span>
           </div>
+
+          {routineSyncError && (
+            <p className="mb-4 rounded-lg bg-gold/10 px-3 py-2 text-xs font-medium text-gold">{routineSyncError}</p>
+          )}
 
           <div className="space-y-3">
             {groups.map((g, i) => (

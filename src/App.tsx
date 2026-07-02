@@ -77,6 +77,7 @@ function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<LastSaved | null>(null);
   const [bestWeights, setBestWeights] = useState<Record<string, number>>({});
+  const [routineSyncError, setRoutineSyncError] = useState<string | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist workout to localStorage on every change
@@ -97,7 +98,11 @@ function App() {
     if (!routine) return;
     if (sameExerciseNames(exercises, routine.exercises)) return;
 
-    updateRoutine(routine.id, routine.name, routine.tag, routineInputFromWorkout(exercises, routine));
+    setRoutineSyncError(null);
+    updateRoutine(routine.id, routine.name, routine.tag, routineInputFromWorkout(exercises, routine)).catch((e) => {
+      console.error("Error syncing workout exercises back to routine:", e);
+      setRoutineSyncError("No se pudo sincronizar este cambio con la rutina guardada. Se va a reintentar con el próximo cambio.");
+    });
     // Only react to changes in the workout's own exercise list here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [exercises]);
@@ -246,6 +251,7 @@ function App() {
                   onSave={handleSaveWorkout}
                   saving={saving}
                   saveError={saveError}
+                  routineSyncError={activeRoutineId ? routineSyncError : null}
                   canUndo={lastSaved !== null}
                   onUndo={handleUndoSave}
                   customExerciseNames={customExerciseNames}

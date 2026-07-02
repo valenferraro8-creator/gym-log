@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { LineChart, Plus, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
@@ -13,6 +13,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/useAuth";
 import { useProgressData } from "@/hooks/useProgressData";
 import { useGoals, type GoalRecord, type NewGoal } from "@/hooks/useGoals";
+import { useExerciseBest } from "@/hooks/useExerciseBest";
+import { loadBestWeights } from "@/hooks/useWorkout";
 import {
   bestWeightEver,
   distinctExerciseNames,
@@ -39,8 +41,12 @@ function StatCard({ label, value }: { label: string; value: string }) {
   );
 }
 
-function computeGoalCurrent(goal: GoalRecord, sessions: SessionRow[]): number {
-  if (goal.exercise_name) return bestWeightEver(sessions, goal.exercise_name);
+function computeGoalCurrent(goal: GoalRecord, sessions: SessionRow[], bestWeights: Record<string, number>): number {
+  if (goal.exercise_name) {
+    // Prefer the all-time best (not capped to the recent-sessions window) —
+    // fall back to the capped client-side value until it's loaded.
+    return bestWeights[goal.exercise_name] ?? bestWeightEver(sessions, goal.exercise_name);
+  }
   return Math.round((sessionsInLastDays(sessions, 28) / 4) * 10) / 10;
 }
 
@@ -57,6 +63,24 @@ function GoalsCard({
   onCreate: (goal: NewGoal) => Promise<void>;
   onDelete: (id: string) => void;
 }) {
+  const { user } = useAuth();
+  const [bestWeights, setBestWeights] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const exerciseNames = goals.map((g) => g.exercise_name).filter((n): n is string => !!n);
+    if (!user || exerciseNames.length === 0) {
+      setBestWeights({});
+      return;
+    }
+    let cancelled = false;
+    loadBestWeights(user.id, exerciseNames).then((map) => {
+      if (!cancelled) setBestWeights(map);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user, goals]);
+
   return (
     <div className="shadow-card mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
       <div className="flex items-center justify-between">
@@ -74,7 +98,13 @@ function GoalsCard({
           {goals.map((g) => (
             <GoalRow
               key={g.id}
-              goal={{ id: g.id, label: g.label, unit: g.unit, current: computeGoalCurrent(g, sessions), target: g.target }}
+              goal={{
+                id: g.id,
+                label: g.label,
+                unit: g.unit,
+                current: computeGoalCurrent(g, sessions, bestWeights),
+                target: g.target,
+              }}
               onDelete={() => onDelete(g.id)}
             />
           ))}
@@ -85,6 +115,7 @@ function GoalsCard({
 }
 
 function ExerciseTab({ sessions }: { sessions: SessionRow[] }) {
+  const { user } = useAuth();
   const names = useMemo(() => {
     const trained = distinctExerciseNames(sessions);
     const rest = knownExercises.filter((n) => !trained.includes(n)).sort((a, b) => a.localeCompare(b));
@@ -98,6 +129,8 @@ function ExerciseTab({ sessions }: { sessions: SessionRow[] }) {
     () => (activeName ? exerciseStatsFor(sessions, activeName) : null),
     [sessions, activeName]
   );
+  // All-time bests (not capped to the recent-sessions window sessions/stats use above).
+  const allTimeBest = useExerciseBest(user, activeName);
 
   if (!activeName) {
     return (
@@ -173,8 +206,18 @@ function ExerciseTab({ sessions }: { sessions: SessionRow[] }) {
 
       {stats && (
         <div className="grid grid-cols-2 gap-2.5">
-          <StatCard label="1RM estimado (histórico)" value={stats.best1RM} />
-          <StatCard label="Mejor serie (histórico)" value={stats.bestSet} />
+          <StatCard
+            label="1RM estimado (histórico)"
+            value={allTimeBest && allTimeBest.best1RM > 0 ? `${allTimeBest.best1RM.toFixed(1)} kg` : stats.best1RM}
+          />
+          <StatCard
+            label="Mejor serie (histórico)"
+            value={
+              allTimeBest && allTimeBest.bestWeight > 0
+                ? `${allTimeBest.bestWeight}kg x ${allTimeBest.bestReps}`
+                : stats.bestSet
+            }
+          />
           <StatCard label="Volumen (último registro)" value={stats.totalVolume} />
           <StatCard label="Series (último registro)" value={String(stats.totalSets)} />
         </div>

@@ -27,15 +27,27 @@ function RoutineCard({
   r: Routine;
   onUseRoutine: (r: Routine) => void;
   onUpdate: (id: string, name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
   hasActiveWorkout: boolean;
   customNames: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmSwitch, setConfirmSwitch] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const previewNames = r.exercises.slice(0, 3).map((e) => e.name).join(", ");
   const remaining = r.exercises.length - 3;
+
+  async function handleDelete() {
+    setConfirmDelete(false);
+    setDeleteError(null);
+    try {
+      await onDelete(r.id);
+    } catch (e) {
+      console.error("Error deleting routine:", e);
+      setDeleteError("No se pudo eliminar la rutina. Probá de nuevo.");
+    }
+  }
 
   return (
     <div className="shadow-card card-interactive rounded-2xl border border-border bg-card-flat p-4">
@@ -70,12 +82,11 @@ function RoutineCard({
         open={confirmDelete}
         title="Eliminar rutina"
         description={`¿Seguro que querés eliminar "${r.name}"? Esta acción no se puede deshacer.`}
-        onConfirm={() => {
-          setConfirmDelete(false);
-          onDelete(r.id);
-        }}
+        onConfirm={handleDelete}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {deleteError && <p className="mt-2 text-xs font-medium text-destructive">{deleteError}</p>}
 
       <ConfirmDialog
         open={confirmSwitch}
@@ -140,7 +151,7 @@ export function RoutinesScreen({
   onUseRoutine: (r: Routine) => void;
   onCreate: (name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
   onUpdate: (id: string, name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
-  onDelete: (id: string) => void;
+  onDelete: (id: string) => Promise<void>;
   hasActiveWorkout?: boolean;
   customExerciseNames?: string[];
 }) {

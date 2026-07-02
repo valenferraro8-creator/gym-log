@@ -187,16 +187,39 @@ order by s.user_id, se.exercise_name, ss.set_number;
 
 -- ================================================================
 -- Vista: mejor peso histórico por ejercicio (todas las sesiones, no
--- solo las últimas). Usada para detectar automáticamente cuándo una
--- serie recién guardada es un nuevo récord personal.
+-- solo las últimas ~80). Usada para detectar automáticamente cuándo una
+-- serie recién guardada es un nuevo récord personal, para el objetivo
+-- ("Goal") de peso de un ejercicio, y para "Mejor serie (histórico)" en
+-- Progreso — todos calculados antes sobre una ventana acotada de
+-- sesiones recientes, lo que hacía que un PR viejo dejara de contar en
+-- silencio con el tiempo.
 -- ================================================================
 create or replace view public.best_weight_per_exercise as
-select
+select distinct on (s.user_id, se.exercise_name)
   s.user_id,
   se.exercise_name,
-  max(ss.weight_kg) as best_weight_kg
+  ss.weight_kg as best_weight_kg,
+  ss.reps
 from public.session_sets ss
 join public.session_exercises se on se.id = ss.session_exercise_id
 join public.workout_sessions s   on s.id = se.session_id
 where ss.done = true and ss.weight_kg is not null
-group by s.user_id, se.exercise_name;
+order by s.user_id, se.exercise_name, ss.weight_kg desc;
+
+-- ================================================================
+-- Vista: mejor 1RM estimado histórico por ejercicio (todas las
+-- sesiones). Usada para "1RM estimado (histórico)" en Progreso, sin el
+-- recorte de la ventana de sesiones recientes.
+-- ================================================================
+create or replace view public.best_est_1rm_per_exercise as
+select distinct on (s.user_id, se.exercise_name)
+  s.user_id,
+  se.exercise_name,
+  ss.weight_kg,
+  ss.reps,
+  (ss.weight_kg * (1 + ss.reps / 30.0)) as est_1rm
+from public.session_sets ss
+join public.session_exercises se on se.id = ss.session_exercise_id
+join public.workout_sessions s   on s.id = se.session_id
+where ss.done = true and ss.weight_kg is not null and ss.reps is not null and ss.reps > 0
+order by s.user_id, se.exercise_name, (ss.weight_kg * (1 + ss.reps / 30.0)) desc;

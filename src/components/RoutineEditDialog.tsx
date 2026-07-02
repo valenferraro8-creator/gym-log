@@ -35,12 +35,14 @@ export function RoutineEditDialog({
     initial ? initial.exercises.map(toRow) : [emptyRow()]
   );
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "");
       setTag(initial?.tag ?? "");
       setRows(initial ? initial.exercises.map(toRow) : [emptyRow()]);
+      setError(null);
     }
   }, [open, initial]);
 
@@ -58,6 +60,7 @@ export function RoutineEditDialog({
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
+    setError(null);
     try {
       await onSave(
         name.trim(),
@@ -69,6 +72,9 @@ export function RoutineEditDialog({
         }))
       );
       setOpen(false);
+    } catch (e) {
+      console.error("Error saving routine:", e);
+      setError("No se pudo guardar la rutina. Revisá tu conexión e intentá de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -145,6 +151,8 @@ export function RoutineEditDialog({
         >
           <Plus size={14} /> Agregar ejercicio
         </button>
+
+        {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
 
         <Button onClick={handleSave} disabled={!canSave} className="rounded-xl text-sm font-bold">
           {saving ? "Guardando..." : initial ? "Guardar cambios" : "Crear rutina"}

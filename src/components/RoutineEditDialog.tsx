@@ -21,10 +21,12 @@ export function RoutineEditDialog({
   trigger,
   initial,
   onSave,
+  customNames = [],
 }: {
   trigger: ReactNode;
   initial?: Routine;
   onSave: (name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
+  customNames?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initial?.name ?? "");
@@ -130,7 +132,7 @@ export function RoutineEditDialog({
             </div>
           ))}
           <datalist id="known-exercises">
-            {knownExercises.map((n) => (
+            {[...knownExercises, ...customNames].map((n) => (
               <option key={n} value={n} />
             ))}
           </datalist>

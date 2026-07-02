@@ -38,6 +38,11 @@ export interface Database {
         Insert: { id?: string; user_id: string; label: string; exercise_name?: string | null; unit: string; target: number };
         Update: { label?: string; target?: number };
       };
+      custom_exercises: {
+        Row: { id: string; user_id: string; name: string; view: string; highlights: Json; equipment: string | null; instructions: string | null; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; view: string; highlights: Json; equipment?: string | null; instructions?: string | null };
+        Update: { view?: string; highlights?: Json; equipment?: string | null; instructions?: string | null };
+      };
     };
     Views: {
       last_set_per_exercise: {

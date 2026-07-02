@@ -103,6 +103,22 @@ alter table public.goals enable row level security;
 create policy "Users manage their own goals"
   on public.goals for all using (auth.uid() = user_id);
 
+-- Ejercicios personalizados creados por el usuario (con su diagrama muscular)
+create table if not exists public.custom_exercises (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid references public.profiles(id) on delete cascade not null,
+  name         text not null,
+  view         text not null,
+  highlights   jsonb not null default '{}'::jsonb,
+  equipment    text,
+  instructions text,
+  created_at   timestamptz default now(),
+  unique (user_id, name)
+);
+alter table public.custom_exercises enable row level security;
+create policy "Users manage their own custom exercises"
+  on public.custom_exercises for all using (auth.uid() = user_id);
+
 -- ================================================================
 -- Trigger: crear perfil automáticamente al registrar usuario
 -- ================================================================
@@ -137,10 +153,12 @@ where ss.done = true and s.finished_at is not null
 order by s.user_id, se.exercise_name, s.finished_at desc;
 
 -- ================================================================
--- Vista: todas las series de la última sesión completada por ejercicio
--- Usada para comparar cada serie de hoy con su serie equivalente
--- (mismo set_number) de la vez anterior, en vez de comparar todo
--- contra una sola serie.
+-- Vista: todas las series (no dropsets) de la última sesión completada
+-- por ejercicio. Usada para comparar cada serie de hoy con su serie
+-- equivalente (mismo set_number) de la vez anterior, en vez de comparar
+-- todo contra una sola serie. Los dropsets quedan afuera porque su
+-- set_number no corresponde a una serie "principal" real y mezclarlos
+-- corre la numeración de las series siguientes.
 -- ================================================================
 create or replace view public.last_session_sets_per_exercise as
 select
@@ -153,6 +171,7 @@ from public.session_sets ss
 join public.session_exercises se on se.id = ss.session_exercise_id
 join public.workout_sessions s   on s.id = se.session_id
 where ss.done = true
+  and coalesce(ss.is_dropset, false) = false
   and s.finished_at is not null
   and s.id = (
     select s2.id

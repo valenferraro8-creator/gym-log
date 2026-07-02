@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { MuscleBody } from "@/components/MuscleBody";
 import { muscleGroupOptions, viewForIds, type MuscleId } from "@/data/bodyMapData";
-import { getExerciseMedia, knownExercises, registerCustomExercise } from "@/data/exerciseLibrary";
+import { getExerciseMedia, knownExercises, registerCustomExercise, type ExerciseMedia } from "@/data/exerciseLibrary";
 import { cn } from "@/lib/utils";
 
 export type NewExercise = {
@@ -13,16 +13,25 @@ export type NewExercise = {
   muscle: string;
 };
 
-export function AddExerciseDialog({ onAdd }: { onAdd: (ex: NewExercise) => void }) {
+export function AddExerciseDialog({
+  onAdd,
+  customNames = [],
+  onCreateCustom,
+}: {
+  onAdd: (ex: NewExercise) => void;
+  customNames?: string[];
+  onCreateCustom?: (name: string, media: ExerciseMedia) => void;
+}) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<"search" | "custom">("search");
   const [query, setQuery] = useState("");
   const [customName, setCustomName] = useState("");
   const [selectedIds, setSelectedIds] = useState<MuscleId[]>([]);
 
+  const allNames = useMemo(() => [...knownExercises, ...customNames], [customNames]);
   const results = useMemo(
-    () => knownExercises.filter((n) => n.toLowerCase().includes(query.toLowerCase())),
-    [query]
+    () => allNames.filter((n) => n.toLowerCase().includes(query.toLowerCase())),
+    [allNames, query]
   );
 
   function reset() {
@@ -51,12 +60,17 @@ export function AddExerciseDialog({ onAdd }: { onAdd: (ex: NewExercise) => void 
 
   function confirmCustom() {
     if (!customName.trim() || selectedIds.length === 0) return;
-    registerCustomExercise(customName.trim(), {
+    const media: ExerciseMedia = {
       view: customView,
       highlights: customHighlights,
       equipment: "Sin especificar",
       instructions: "Ejercicio agregado manualmente — todavía no tiene una técnica de ejecución guardada.",
-    });
+    };
+    if (onCreateCustom) {
+      onCreateCustom(customName.trim(), media);
+    } else {
+      registerCustomExercise(customName.trim(), media);
+    }
     onAdd({ name: customName.trim(), muscle: "" });
     setOpen(false);
     reset();

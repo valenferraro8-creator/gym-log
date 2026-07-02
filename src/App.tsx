@@ -7,6 +7,7 @@ import { AuthScreen } from "@/screens/AuthScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoutines, type RoutineExerciseInput } from "@/hooks/useRoutines";
 import { saveWorkoutSession, loadLastSets, type PreviousSets } from "@/hooks/useWorkout";
+import { useCustomExercises } from "@/hooks/useCustomExercises";
 import { supabase } from "@/lib/supabase";
 import { type ExerciseEntry, type Routine } from "@/data/mock";
 
@@ -65,6 +66,7 @@ function sameExerciseNames(a: { name: string }[], b: { name: string }[]) {
 function App() {
   const { user, loading: authLoading } = useAuth();
   const { routines, create: createRoutine, update: updateRoutine, remove: removeRoutine } = useRoutines(user);
+  const { customNames: customExerciseNames, create: createCustomExercise } = useCustomExercises(user);
 
   const [tab, setTab] = useState<Tab>("workout");
   const saved = loadSaved();
@@ -72,6 +74,7 @@ function App() {
   const [activeRoutineName, setActiveRoutineName] = useState(saved?.routineName ?? "");
   const [activeRoutineId, setActiveRoutineId] = useState(saved?.routineId ?? "");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<LastSaved | null>(null);
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -169,19 +172,24 @@ function App() {
     }
 
     setSaving(true);
+    setSaveError(null);
     try {
-      const session = await saveWorkoutSession(user.id, exercises, activeRoutineName);
+      const session = await saveWorkoutSession(user.id, exercises, activeRoutineName, activeRoutineId || null);
       clearUndoTimer();
       setLastSaved({ sessionId: session.id, exercises, routineName: activeRoutineName, routineId: activeRoutineId });
       undoTimerRef.current = setTimeout(() => setLastSaved(null), UNDO_WINDOW_MS);
-    } catch (e) {
-      console.error("Error saving workout:", e);
-    } finally {
-      setSaving(false);
+      // Only clear the in-progress workout once it's actually confirmed saved —
+      // if the insert above throws, the draft stays in state/localStorage so
+      // nothing is lost and the user can just try saving again.
       localStorage.removeItem(STORAGE_KEY);
       setExercises([]);
       setActiveRoutineName("");
       setActiveRoutineId("");
+    } catch (e) {
+      console.error("Error saving workout:", e);
+      setSaveError("No se pudo guardar el registro. Revisá tu conexión e intentá de nuevo — no se perdió nada.");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -234,8 +242,11 @@ function App() {
                   routineName={activeRoutineName}
                   onSave={handleSaveWorkout}
                   saving={saving}
+                  saveError={saveError}
                   canUndo={lastSaved !== null}
                   onUndo={handleUndoSave}
+                  customExerciseNames={customExerciseNames}
+                  onCreateCustomExercise={createCustomExercise}
                 />
               )}
               {tab === "routines" && (
@@ -245,6 +256,8 @@ function App() {
                   onCreate={createRoutine}
                   onUpdate={updateRoutine}
                   onDelete={removeRoutine}
+                  hasActiveWorkout={exercises.length > 0}
+                  customExerciseNames={customExerciseNames}
                 />
               )}
               {tab === "progress" && <ProgressScreen />}

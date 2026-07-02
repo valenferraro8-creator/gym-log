@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getPrimaryMuscleLabel } from "@/data/exerciseLibrary";
+import { getPrimaryMuscleLabel, type ExerciseMedia } from "@/data/exerciseLibrary";
 import type { DropSet, ExerciseEntry } from "@/data/mock";
 import { cn } from "@/lib/utils";
 
@@ -376,16 +376,22 @@ export function WorkoutScreen({
   routineName,
   onSave,
   saving = false,
+  saveError = null,
   canUndo = false,
   onUndo,
+  customExerciseNames = [],
+  onCreateCustomExercise,
 }: {
   exercises: ExerciseEntry[];
   setExercises: React.Dispatch<React.SetStateAction<ExerciseEntry[]>>;
   routineName: string;
   onSave: () => void;
   saving?: boolean;
+  saveError?: string | null;
   canUndo?: boolean;
   onUndo?: () => void;
+  customExerciseNames?: string[];
+  onCreateCustomExercise?: (name: string, media: ExerciseMedia) => void;
 }) {
   const todayLabel = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
   const groups = groupExercises(exercises);
@@ -568,7 +574,11 @@ export function WorkoutScreen({
             ))}
           </div>
 
-          <AddExerciseDialog onAdd={handleAdd} />
+          <AddExerciseDialog
+            onAdd={handleAdd}
+            customNames={customExerciseNames}
+            onCreateCustom={onCreateCustomExercise}
+          />
 
           <ConfirmDialog
             open={confirmSave}
@@ -583,12 +593,18 @@ export function WorkoutScreen({
             onCancel={() => setConfirmSave(false)}
           />
 
+          {saveError && (
+            <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+              {saveError}
+            </p>
+          )}
+
           <Button
             onClick={() => setConfirmSave(true)}
             disabled={saving}
             className="w-full rounded-xl py-3 text-sm font-bold"
           >
-            {saving ? "Guardando..." : "Guardar registro"}
+            {saving ? "Guardando..." : saveError ? "Reintentar guardar" : "Guardar registro"}
           </Button>
         </>
       )}

@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -7,34 +7,42 @@ import { knownExercises } from "@/data/exerciseLibrary";
 import type { Routine } from "@/data/mock";
 import type { RoutineExerciseInput } from "@/hooks/useRoutines";
 
-type Row = RoutineExerciseInput & { key: string };
+type Row = { key: string; name: string; sets: string; reps: string };
 
 function emptyRow(): Row {
-  return { key: `row-${Date.now()}-${Math.random()}`, name: "", sets: 3, reps: "8-12" };
+  return { key: `row-${Date.now()}-${Math.random()}`, name: "", sets: "3", reps: "8-12" };
+}
+
+function toRow(ex: RoutineExerciseInput): Row {
+  return { key: `row-${Math.random()}`, name: ex.name, sets: String(ex.sets), reps: ex.reps };
 }
 
 export function RoutineEditDialog({
   trigger,
   initial,
   onSave,
+  customNames = [],
 }: {
   trigger: ReactNode;
   initial?: Routine;
   onSave: (name: string, tag: string, exercises: RoutineExerciseInput[]) => Promise<void>;
+  customNames?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(initial?.name ?? "");
   const [tag, setTag] = useState(initial?.tag ?? "");
   const [rows, setRows] = useState<Row[]>(
-    initial ? initial.exercises.map((ex) => ({ ...ex, key: `row-${Math.random()}` })) : [emptyRow()]
+    initial ? initial.exercises.map(toRow) : [emptyRow()]
   );
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (open) {
       setName(initial?.name ?? "");
       setTag(initial?.tag ?? "");
-      setRows(initial ? initial.exercises.map((ex) => ({ ...ex, key: `row-${Math.random()}` })) : [emptyRow()]);
+      setRows(initial ? initial.exercises.map(toRow) : [emptyRow()]);
+      setError(null);
     }
   }, [open, initial]);
 
@@ -46,19 +54,37 @@ export function RoutineEditDialog({
     setRows((prev) => prev.filter((r) => r.key !== key));
   }
 
+  function moveRow(index: number, direction: -1 | 1) {
+    setRows((prev) => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
   const validRows = rows.filter((r) => r.name.trim().length > 0);
   const canSave = name.trim().length > 0 && validRows.length > 0 && !saving;
 
   async function handleSave() {
     if (!canSave) return;
     setSaving(true);
+    setError(null);
     try {
       await onSave(
         name.trim(),
         tag.trim(),
-        validRows.map((r) => ({ name: r.name.trim(), sets: r.sets, reps: r.reps.trim() || "8-12" }))
+        validRows.map((r) => ({
+          name: r.name.trim(),
+          sets: Math.max(1, parseInt(r.sets, 10) || 3),
+          reps: r.reps.trim() || "8-12",
+        }))
       );
       setOpen(false);
+    } catch (e) {
+      console.error("Error saving routine:", e);
+      setError("No se pudo guardar la rutina. Revisá tu conexión e intentá de nuevo.");
     } finally {
       setSaving(false);
     }
@@ -88,8 +114,28 @@ export function RoutineEditDialog({
         />
 
         <div className="max-h-72 space-y-2 overflow-y-auto">
-          {rows.map((row) => (
-            <div key={row.key} className="grid grid-cols-[1fr_44px_56px_28px] items-center gap-1.5">
+          {rows.map((row, idx) => (
+            <div key={row.key} className="grid grid-cols-[18px_1fr_44px_56px_28px] items-center gap-1.5">
+              <div className="flex flex-col items-center justify-center gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveRow(idx, -1)}
+                  disabled={idx === 0}
+                  aria-label="Mover ejercicio arriba"
+                  className="text-muted-foreground disabled:opacity-20"
+                >
+                  <ChevronUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveRow(idx, 1)}
+                  disabled={idx === rows.length - 1}
+                  aria-label="Mover ejercicio abajo"
+                  className="text-muted-foreground disabled:opacity-20"
+                >
+                  <ChevronDown size={13} />
+                </button>
+              </div>
               <Input
                 value={row.name}
                 onChange={(e) => updateRow(row.key, { name: e.target.value })}
@@ -99,7 +145,7 @@ export function RoutineEditDialog({
               />
               <Input
                 value={row.sets}
-                onChange={(e) => updateRow(row.key, { sets: parseInt(e.target.value, 10) || 0 })}
+                onChange={(e) => updateRow(row.key, { sets: e.target.value })}
                 type="number"
                 inputMode="numeric"
                 placeholder="Sets"
@@ -122,7 +168,7 @@ export function RoutineEditDialog({
             </div>
           ))}
           <datalist id="known-exercises">
-            {knownExercises.map((n) => (
+            {[...knownExercises, ...customNames].map((n) => (
               <option key={n} value={n} />
             ))}
           </datalist>
@@ -135,6 +181,8 @@ export function RoutineEditDialog({
         >
           <Plus size={14} /> Agregar ejercicio
         </button>
+
+        {error && <p className="rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">{error}</p>}
 
         <Button onClick={handleSave} disabled={!canSave} className="rounded-xl text-sm font-bold">
           {saving ? "Guardando..." : initial ? "Guardar cambios" : "Crear rutina"}

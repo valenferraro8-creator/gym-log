@@ -1,7 +1,7 @@
 import { useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { es } from "date-fns/locale";
-import { Check, Dumbbell, MoreHorizontal, Plus, Zap } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Dumbbell, MoreHorizontal, Plus, Undo2, Zap } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { Button } from "@/components/ui/button";
 import { IconButton } from "@/components/IconButton";
@@ -9,15 +9,16 @@ import { EmptyState } from "@/components/EmptyState";
 import { ExerciseInfoDialog } from "@/components/ExerciseInfoDialog";
 import { AddExerciseDialog, type NewExercise } from "@/components/AddExerciseDialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { RestTimerBar } from "@/components/RestTimerBar";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getPrimaryMuscleLabel } from "@/data/exerciseLibrary";
+import { getPrimaryMuscleLabel, type ExerciseMedia } from "@/data/exerciseLibrary";
 import type { DropSet, ExerciseEntry } from "@/data/mock";
-import { cn } from "@/lib/utils";
+import { cn, sanitizeDecimal, sanitizeInt } from "@/lib/utils";
 
 function DropRow({
   index,
@@ -43,14 +44,14 @@ function DropRow({
       <span className="min-w-0 truncate text-[10px] font-medium uppercase tracking-wide text-muted-foreground/60">Drop</span>
       <input
         value={drop.weight}
-        onChange={(e) => onChangeWeight(e.target.value)}
+        onChange={(e) => onChangeWeight(sanitizeDecimal(e.target.value))}
         placeholder="0"
         inputMode="decimal"
         className="font-tabular h-7 min-w-0 w-full rounded-md border border-border/70 bg-secondary/60 text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
       />
       <input
         value={drop.reps}
-        onChange={(e) => onChangeReps(e.target.value)}
+        onChange={(e) => onChangeReps(sanitizeInt(e.target.value))}
         placeholder="0"
         inputMode="numeric"
         className="font-tabular h-7 min-w-0 w-full rounded-md border border-border/70 bg-secondary/60 text-center font-mono text-xs font-semibold text-foreground outline-none focus:border-primary"
@@ -101,6 +102,7 @@ function computeDelta(previous: string, weight: string, reps: string) {
 function SetRow({
   index,
   set,
+  bestWeight,
   onChangeWeight,
   onChangeReps,
   onToggleDone,
@@ -111,6 +113,7 @@ function SetRow({
 }: {
   index: number;
   set: ExerciseEntry["sets"][number];
+  bestWeight?: number;
   onChangeWeight: (value: string) => void;
   onChangeReps: (value: string) => void;
   onToggleDone: () => void;
@@ -120,6 +123,8 @@ function SetRow({
   onAddDrop: () => void;
 }) {
   const delta = set.weight.trim() !== "" && set.reps.trim() !== "" ? computeDelta(set.previous, set.weight, set.reps) : null;
+  const numWeight = parseFloat(set.weight);
+  const isPR = bestWeight !== undefined && !Number.isNaN(numWeight) && numWeight > bestWeight;
 
   return (
     <div>
@@ -133,14 +138,14 @@ function SetRow({
         <span className="min-w-0 truncate font-mono text-[11px] text-muted-foreground/70">{set.previous}</span>
         <input
           value={set.weight}
-          onChange={(e) => onChangeWeight(e.target.value)}
+          onChange={(e) => onChangeWeight(sanitizeDecimal(e.target.value))}
           placeholder="0"
           inputMode="decimal"
           className="font-hero h-9 min-w-0 w-full rounded-md border border-border bg-secondary text-center text-base font-black text-foreground outline-none focus:border-primary"
         />
         <input
           value={set.reps}
-          onChange={(e) => onChangeReps(e.target.value)}
+          onChange={(e) => onChangeReps(sanitizeInt(e.target.value))}
           placeholder="0"
           inputMode="numeric"
           className="font-hero h-9 min-w-0 w-full rounded-md border border-border bg-secondary text-center text-base font-black text-foreground outline-none focus:border-primary"
@@ -170,7 +175,7 @@ function SetRow({
         </div>
       )}
 
-      {set.isPR && <div className="ml-7 mt-0.5 text-[11px] font-semibold text-gold">Mejor marca personal</div>}
+      {isPR && <div className="ml-7 mt-0.5 text-[11px] font-semibold text-gold">Mejor marca personal</div>}
 
       {set.drops && set.drops.length > 0 && (
         <div className="ml-7 mt-0.5 space-y-0.5 border-l border-dashed border-border pl-2">
@@ -206,6 +211,8 @@ function SetRow({
 
 function ExerciseCard({
   ex,
+  bestWeight,
+  canMergeWithNext = false,
   onChangeSetWeight,
   onChangeSetReps,
   onToggleSetDone,
@@ -215,8 +222,12 @@ function ExerciseCard({
   onAddDrop,
   onAddSet,
   onRemoveExercise,
+  onAddToSuperset,
+  onRemoveFromSuperset,
 }: {
   ex: ExerciseEntry;
+  bestWeight?: number;
+  canMergeWithNext?: boolean;
   onChangeSetWeight: (setId: string, value: string) => void;
   onChangeSetReps: (setId: string, value: string) => void;
   onToggleSetDone: (setId: string) => void;
@@ -226,6 +237,8 @@ function ExerciseCard({
   onAddDrop: (setId: string) => void;
   onAddSet: () => void;
   onRemoveExercise: () => void;
+  onAddToSuperset?: () => void;
+  onRemoveFromSuperset?: () => void;
 }) {
   const muscleLabel = getPrimaryMuscleLabel(ex.name) ?? ex.muscle;
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -248,6 +261,12 @@ function ExerciseCard({
             <IconButton icon={MoreHorizontal} label="Más opciones del ejercicio" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl border-border bg-card">
+            {onRemoveFromSuperset && (
+              <DropdownMenuItem onSelect={onRemoveFromSuperset}>Quitar de la superserie</DropdownMenuItem>
+            )}
+            {!onRemoveFromSuperset && canMergeWithNext && onAddToSuperset && (
+              <DropdownMenuItem onSelect={onAddToSuperset}>Combinar con el siguiente en superserie</DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => setConfirmRemove(true)}
               className="text-destructive focus:text-destructive"
@@ -284,6 +303,7 @@ function ExerciseCard({
             key={s.id}
             index={i}
             set={s}
+            bestWeight={bestWeight}
             onChangeWeight={(value) => onChangeSetWeight(s.id, value)}
             onChangeReps={(value) => onChangeSetReps(s.id, value)}
             onToggleDone={() => onToggleSetDone(s.id)}
@@ -307,6 +327,7 @@ function ExerciseCard({
 
 function SupersetGroup({
   exercises,
+  bestWeights,
   onChangeSetWeight,
   onChangeSetReps,
   onToggleSetDone,
@@ -316,8 +337,10 @@ function SupersetGroup({
   onAddDrop,
   onAddSet,
   onRemoveExercise,
+  onRemoveFromSuperset,
 }: {
   exercises: ExerciseEntry[];
+  bestWeights: Record<string, number>;
   onChangeSetWeight: (exId: string, setId: string, value: string) => void;
   onChangeSetReps: (exId: string, setId: string, value: string) => void;
   onToggleSetDone: (exId: string, setId: string) => void;
@@ -327,6 +350,7 @@ function SupersetGroup({
   onAddDrop: (exId: string, setId: string) => void;
   onAddSet: (exId: string) => void;
   onRemoveExercise: (exId: string) => void;
+  onRemoveFromSuperset: (exId: string) => void;
 }) {
   return (
     <div className="shadow-card overflow-hidden rounded-2xl border border-border border-l-[3px] border-l-violet-400 bg-card">
@@ -339,6 +363,8 @@ function SupersetGroup({
           <ExerciseCard
             key={ex.id}
             ex={ex}
+            bestWeight={bestWeights[ex.name]}
+            onRemoveFromSuperset={() => onRemoveFromSuperset(ex.id)}
             onChangeSetWeight={(setId, value) => onChangeSetWeight(ex.id, setId, value)}
             onChangeSetReps={(setId, value) => onChangeSetReps(ex.id, setId, value)}
             onToggleSetDone={(setId) => onToggleSetDone(ex.id, setId)}
@@ -375,17 +401,36 @@ export function WorkoutScreen({
   setExercises,
   routineName,
   onSave,
+  onDiscard,
   saving = false,
+  saveError = null,
+  routineSyncError = null,
+  canUndo = false,
+  onUndo,
+  customExerciseNames = [],
+  onCreateCustomExercise,
+  bestWeights = {},
 }: {
   exercises: ExerciseEntry[];
   setExercises: React.Dispatch<React.SetStateAction<ExerciseEntry[]>>;
   routineName: string;
   onSave: () => void;
+  onDiscard?: () => void;
   saving?: boolean;
+  saveError?: string | null;
+  routineSyncError?: string | null;
+  canUndo?: boolean;
+  onUndo?: () => void;
+  customExerciseNames?: string[];
+  onCreateCustomExercise?: (name: string, media: ExerciseMedia) => void;
+  bestWeights?: Record<string, number>;
 }) {
   const todayLabel = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
   const groups = groupExercises(exercises);
   const totalSets = exercises.reduce((sum, ex) => sum + ex.sets.length, 0);
+  const [confirmSave, setConfirmSave] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const [restStartSignal, setRestStartSignal] = useState(0);
 
   function updateSet(exId: string, setId: string, patch: Partial<ExerciseEntry["sets"][number]>) {
     setExercises((prev) =>
@@ -396,6 +441,8 @@ export function WorkoutScreen({
   }
 
   function toggleSetDone(exId: string, setId: string) {
+    const wasDone = exercises.find((ex) => ex.id === exId)?.sets.find((s) => s.id === setId)?.done;
+    if (!wasDone) setRestStartSignal((n) => n + 1);
     setExercises((prev) =>
       prev.map((ex) =>
         ex.id !== exId ? ex : { ...ex, sets: ex.sets.map((s) => (s.id === setId ? { ...s, done: !s.done } : s)) }
@@ -421,6 +468,39 @@ export function WorkoutScreen({
 
   function removeExercise(exId: string) {
     setExercises((prev) => prev.filter((ex) => ex.id !== exId));
+  }
+
+  function moveGroup(groupIndex: number, direction: -1 | 1) {
+    setExercises((prev) => {
+      const currentGroups = groupExercises(prev);
+      const target = groupIndex + direction;
+      if (target < 0 || target >= currentGroups.length) return prev;
+      const reordered = [...currentGroups];
+      [reordered[groupIndex], reordered[target]] = [reordered[target], reordered[groupIndex]];
+      return reordered.flatMap((g) => g.exercises);
+    });
+  }
+
+  function addToSuperset(exIdA: string, exIdB: string) {
+    setExercises((prev) => {
+      const groupId = `ss-${Date.now()}`;
+      return prev.map((ex) => (ex.id === exIdA || ex.id === exIdB ? { ...ex, supersetGroup: groupId } : ex));
+    });
+  }
+
+  function removeFromSuperset(exId: string) {
+    setExercises((prev) => {
+      const target = prev.find((ex) => ex.id === exId);
+      if (!target?.supersetGroup) return prev;
+      const groupId = target.supersetGroup;
+      const withoutEx = prev.map((ex) => (ex.id === exId ? { ...ex, supersetGroup: undefined } : ex));
+      const remaining = withoutEx.filter((ex) => ex.supersetGroup === groupId);
+      // A superset of one exercise doesn't make sense — dissolve it too.
+      if (remaining.length === 1) {
+        return withoutEx.map((ex) => (ex.supersetGroup === groupId ? { ...ex, supersetGroup: undefined } : ex));
+      }
+      return withoutEx;
+    });
   }
 
   function addDrop(exId: string, setId: string) {
@@ -464,6 +544,11 @@ export function WorkoutScreen({
   }
 
   function toggleDropDone(exId: string, setId: string, dropId: string) {
+    const wasDone = exercises
+      .find((ex) => ex.id === exId)
+      ?.sets.find((s) => s.id === setId)
+      ?.drops?.find((d) => d.id === dropId)?.done;
+    if (!wasDone) setRestStartSignal((n) => n + 1);
     setExercises((prev) =>
       prev.map((ex) =>
         ex.id !== exId
@@ -497,11 +582,28 @@ export function WorkoutScreen({
       <TopBar title="Registro" subtitle={routineName ? `${routineName} · ${todayLabel}` : todayLabel} />
 
       {exercises.length === 0 ? (
-        <EmptyState
-          icon={Dumbbell}
-          title="Sin entreno registrado hoy"
-          description="Elegí una rutina desde la pestaña Rutinas y empezá a sumar series."
-        />
+        <>
+          {canUndo && onUndo && (
+            <div className="shadow-card mb-4 flex items-center justify-between gap-3 rounded-xl border border-border bg-card-flat p-3.5">
+              <div>
+                <p className="text-sm font-bold text-foreground">Registro guardado</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">¿Te equivocaste? Podés deshacerlo.</p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={onUndo}
+                className="flex items-center gap-1.5 rounded-xl text-xs font-bold"
+              >
+                <Undo2 size={14} /> Deshacer
+              </Button>
+            </div>
+          )}
+          <EmptyState
+            icon={Dumbbell}
+            title="Sin entreno registrado hoy"
+            description="Elegí una rutina desde la pestaña Rutinas y empezá a sumar series."
+          />
+        </>
       ) : (
         <>
           <div className="mb-4 flex items-center justify-between rounded-xl bg-secondary px-3 py-2.5">
@@ -510,12 +612,35 @@ export function WorkoutScreen({
             </span>
           </div>
 
+          {routineSyncError && (
+            <p className="mb-4 rounded-lg bg-gold/10 px-3 py-2 text-xs font-medium text-gold">{routineSyncError}</p>
+          )}
+
           <div className="space-y-3">
             {groups.map((g, i) => (
               <div key={i} className="stagger-item" style={{ "--stagger-delay": `${i * 50}ms` } as CSSProperties}>
+                {groups.length > 1 && (
+                  <div className="mb-1 flex justify-end gap-1">
+                    <IconButton
+                      icon={ChevronUp}
+                      label="Mover ejercicio arriba"
+                      onClick={() => moveGroup(i, -1)}
+                      disabled={i === 0}
+                      className="h-6 w-6 disabled:opacity-20"
+                    />
+                    <IconButton
+                      icon={ChevronDown}
+                      label="Mover ejercicio abajo"
+                      onClick={() => moveGroup(i, 1)}
+                      disabled={i === groups.length - 1}
+                      className="h-6 w-6 disabled:opacity-20"
+                    />
+                  </div>
+                )}
                 {g.type === "superset" ? (
                   <SupersetGroup
                     exercises={g.exercises}
+                    bestWeights={bestWeights}
                     onChangeSetWeight={(exId, setId, value) => updateSet(exId, setId, { weight: value })}
                     onChangeSetReps={(exId, setId, value) => updateSet(exId, setId, { reps: value })}
                     onToggleSetDone={toggleSetDone}
@@ -525,11 +650,19 @@ export function WorkoutScreen({
                     onAddDrop={addDrop}
                     onAddSet={addSet}
                     onRemoveExercise={removeExercise}
+                    onRemoveFromSuperset={removeFromSuperset}
                   />
                 ) : (
                   <div className="shadow-card card-interactive overflow-hidden rounded-2xl border border-border bg-card">
                     <ExerciseCard
                       ex={g.exercises[0]}
+                      bestWeight={bestWeights[g.exercises[0].name]}
+                      canMergeWithNext={groups[i + 1]?.type === "single"}
+                      onAddToSuperset={
+                        groups[i + 1]?.type === "single"
+                          ? () => addToSuperset(g.exercises[0].id, groups[i + 1].exercises[0].id)
+                          : undefined
+                      }
                       onChangeSetWeight={(setId, value) => updateSet(g.exercises[0].id, setId, { weight: value })}
                       onChangeSetReps={(setId, value) => updateSet(g.exercises[0].id, setId, { reps: value })}
                       onToggleSetDone={(setId) => toggleSetDone(g.exercises[0].id, setId)}
@@ -546,11 +679,66 @@ export function WorkoutScreen({
             ))}
           </div>
 
-          <AddExerciseDialog onAdd={handleAdd} />
+          <RestTimerBar startSignal={restStartSignal} />
 
-          <Button onClick={onSave} disabled={saving} className="w-full rounded-xl py-3 text-sm font-bold">
-            {saving ? "Guardando..." : "Guardar registro"}
-          </Button>
+          <AddExerciseDialog
+            onAdd={handleAdd}
+            customNames={customExerciseNames}
+            onCreateCustom={onCreateCustomExercise}
+          />
+
+          <ConfirmDialog
+            open={confirmSave}
+            title="Guardar registro"
+            description={`¿Confirmás guardar el entreno de hoy con ${exercises.length} ejercicios y ${totalSets} series?`}
+            confirmLabel="Guardar"
+            confirmVariant="default"
+            onConfirm={() => {
+              setConfirmSave(false);
+              onSave();
+            }}
+            onCancel={() => setConfirmSave(false)}
+          />
+
+          {onDiscard && (
+            <ConfirmDialog
+              open={confirmDiscard}
+              title="Descartar registro"
+              description="¿Seguro que querés descartar el entreno de hoy? Se van a borrar todos los ejercicios y series sin guardar."
+              confirmLabel="Descartar"
+              onConfirm={() => {
+                setConfirmDiscard(false);
+                onDiscard();
+              }}
+              onCancel={() => setConfirmDiscard(false)}
+            />
+          )}
+
+          {saveError && (
+            <p className="mb-2 rounded-lg bg-destructive/10 px-3 py-2 text-xs font-medium text-destructive">
+              {saveError}
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <Button
+              onClick={() => setConfirmSave(true)}
+              disabled={saving}
+              className="flex-1 rounded-xl py-3 text-sm font-bold"
+            >
+              {saving ? "Guardando..." : saveError ? "Reintentar guardar" : "Guardar registro"}
+            </Button>
+            {onDiscard && (
+              <Button
+                variant="secondary"
+                onClick={() => setConfirmDiscard(true)}
+                disabled={saving}
+                className="rounded-xl px-4 py-3 text-sm font-bold text-destructive"
+              >
+                Descartar
+              </Button>
+            )}
+          </div>
         </>
       )}
     </div>

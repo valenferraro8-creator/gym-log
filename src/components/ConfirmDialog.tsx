@@ -5,6 +5,7 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Eliminar",
+  confirmVariant = "destructive",
   onConfirm,
   onCancel,
 }: {
@@ -12,6 +13,7 @@ export function ConfirmDialog({
   title: string;
   description: string;
   confirmLabel?: string;
+  confirmVariant?: "destructive" | "default";
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -29,7 +31,7 @@ export function ConfirmDialog({
           <Button variant="secondary" className="flex-1 rounded-xl text-sm font-semibold" onClick={onCancel}>
             Cancelar
           </Button>
-          <Button variant="destructive" className="flex-1 rounded-xl text-sm font-semibold" onClick={onConfirm}>
+          <Button variant={confirmVariant} className="flex-1 rounded-xl text-sm font-semibold" onClick={onConfirm}>
             {confirmLabel}
           </Button>
         </div>

@@ -211,25 +211,330 @@ const library: Record<string, ExerciseMedia> = {
       "De pie, elevá los brazos hacia los costados hasta la altura de los hombros con una leve flexión de codos, sin usar impulso.",
     note: "El deltoides lateral (cabeza media) es el motor principal — no tiene polígono propio en este diagrama. Los deltoides anterior y posterior asisten; el trapecio superior eleva la escápula.",
   },
+  "press de banca con mancuernas": {
+    view: "anterior",
+    highlights: h([
+      ["chest", "primary"],
+      ["front-deltoids", "secondary"],
+      ["triceps-anterior", "secondary"],
+    ]),
+    equipment: "Mancuernas y banco plano",
+    instructions:
+      "Acostado en el banco, bajá las mancuernas a los costados del pecho y empujá hacia arriba juntándolas levemente en la parte alta.",
+  },
+  "aperturas con mancuernas": {
+    view: "anterior",
+    highlights: h([
+      ["chest", "primary"],
+      ["front-deltoids", "secondary"],
+    ]),
+    equipment: "Mancuernas y banco",
+    instructions:
+      "Con los brazos semiflexionados, abrí las mancuernas hacia los costados en arco hasta sentir el estiramiento del pecho y volvé juntándolas arriba.",
+  },
+  "press militar con barra": {
+    view: "anterior",
+    highlights: h([
+      ["front-deltoids", "primary"],
+      ["triceps-anterior", "secondary"],
+      ["trapezius", "secondary"],
+    ]),
+    equipment: "Barra y rack",
+    instructions:
+      "De pie o sentado, empujá la barra desde los hombros hasta arriba de la cabeza en línea recta, sin arquear la espalda baja.",
+  },
+  "press militar con mancuernas": {
+    view: "anterior",
+    highlights: h([
+      ["front-deltoids", "primary"],
+      ["triceps-anterior", "secondary"],
+    ]),
+    equipment: "Mancuernas",
+    instructions:
+      "Sentado o de pie, empujá las mancuernas hacia arriba desde la altura de los hombros hasta extender los codos sin bloquearlos del todo.",
+  },
+  "elevaciones frontales": {
+    view: "anterior",
+    highlights: h([["front-deltoids", "primary"]]),
+    equipment: "Mancuernas o barra",
+    instructions:
+      "De pie, elevá el peso al frente hasta la altura de los hombros con los brazos casi extendidos, sin balancear el torso.",
+  },
+  "remo al menton": {
+    view: "both",
+    highlights: h([
+      ["trapezius", "primary"],
+      ["front-deltoids", "secondary"],
+    ]),
+    equipment: "Barra o polea baja",
+    instructions:
+      "De pie, tirá la barra hacia arriba pegada al cuerpo hasta la altura del pecho, llevando los codos por encima de las manos.",
+  },
+  "curl martillo": {
+    view: "anterior",
+    highlights: h([
+      ["biceps", "primary"],
+      ["forearm", "secondary"],
+    ]),
+    equipment: "Mancuernas",
+    instructions:
+      "De pie, con agarre neutro (palmas enfrentadas), flexioná los antebrazos llevando las mancuernas hacia los hombros sin girar la muñeca.",
+  },
+  "curl concentrado": {
+    view: "anterior",
+    highlights: h([["biceps", "primary"]]),
+    equipment: "Mancuerna y banco",
+    instructions:
+      "Sentado, apoyá el codo en la cara interna del muslo y flexioná el antebrazo llevando la mancuerna hacia el hombro sin mover el brazo.",
+  },
+  "curl en banco scott": {
+    view: "anterior",
+    highlights: h([
+      ["biceps", "primary"],
+      ["forearm", "secondary"],
+    ]),
+    equipment: "Banco Scott y barra Z",
+    instructions:
+      "Con los brazos apoyados sobre el banco inclinado, flexioná los antebrazos sin despegar los tríceps del apoyo hasta arriba.",
+  },
+  "press frances": {
+    view: "posterior",
+    highlights: h([
+      ["triceps-long", "primary"],
+      ["triceps-lateral", "primary"],
+    ]),
+    equipment: "Barra Z o mancuernas y banco",
+    instructions:
+      "Acostado, bajá el peso controlado hacia la frente flexionando solo los codos, y extendé los antebrazos sin mover los brazos de posición.",
+  },
+  "patada de triceps": {
+    view: "posterior",
+    highlights: h([
+      ["triceps-long", "primary"],
+      ["triceps-lateral", "secondary"],
+    ]),
+    equipment: "Mancuerna y banco",
+    instructions:
+      "Tronco inclinado y brazo pegado al costado, extendé el antebrazo hacia atrás hasta trabar el codo y volvé controlado.",
+  },
+  "fondos en banco": {
+    view: "posterior",
+    highlights: h([
+      ["triceps-lateral", "primary"],
+      ["triceps-long", "secondary"],
+    ]),
+    equipment: "Banco",
+    instructions:
+      "Con las manos apoyadas en el borde del banco y piernas extendidas, bajá el cuerpo flexionando los codos y empujá de nuevo hacia arriba.",
+  },
+  "remo con mancuerna": {
+    view: "both",
+    highlights: h([
+      ["upper-back", "primary"],
+      ["biceps", "secondary"],
+      ["back-deltoids", "secondary"],
+    ]),
+    equipment: "Mancuerna y banco",
+    instructions:
+      "Apoyado con una mano y rodilla en el banco, tirá la mancuerna hacia la cadera llevando el codo hacia atrás, sin rotar el torso.",
+  },
+  "remo en polea baja": {
+    view: "both",
+    highlights: h([
+      ["upper-back", "primary"],
+      ["biceps", "secondary"],
+      ["trapezius", "secondary"],
+    ]),
+    equipment: "Polea baja con agarre en V",
+    instructions:
+      "Sentado con espalda recta, tirá el agarre hacia el abdomen llevando los codos atrás y juntando los omóplatos.",
+  },
+  "remo invertido": {
+    view: "both",
+    highlights: h([
+      ["upper-back", "primary"],
+      ["biceps", "secondary"],
+      ["back-deltoids", "secondary"],
+    ]),
+    equipment: "Barra en rack bajo o TRX",
+    instructions:
+      "Colgado bajo la barra con el cuerpo recto, tirá el pecho hacia la barra llevando los codos hacia atrás y bajá controlado.",
+  },
+  "pull-over con mancuerna": {
+    view: "both",
+    highlights: h([
+      ["upper-back", "primary"],
+      ["chest", "secondary"],
+      ["triceps-long", "secondary"],
+    ]),
+    equipment: "Mancuerna y banco",
+    instructions:
+      "Acostado transversal al banco, bajá la mancuerna en arco por detrás de la cabeza y volvé llevándola sobre el pecho sin flexionar mucho los codos.",
+  },
+  zancadas: {
+    view: "both",
+    highlights: h([
+      ["quad-rectus", "primary"],
+      ["glutes", "secondary"],
+      ["hamstring-biceps-femoris", "secondary"],
+    ]),
+    equipment: "Mancuernas o barra",
+    instructions:
+      "Dando un paso largo hacia adelante, bajá hasta que ambas rodillas formen 90° y empujá con la pierna delantera para volver a la posición inicial.",
+  },
+  "sentadilla bulgara": {
+    view: "both",
+    highlights: h([
+      ["quad-rectus", "primary"],
+      ["quad-vastus-lateral", "primary"],
+      ["glutes", "secondary"],
+    ]),
+    equipment: "Mancuernas y banco",
+    instructions:
+      "Con el pie trasero apoyado sobre un banco, bajá flexionando la pierna delantera hasta el paralelo y empujá para volver arriba.",
+  },
+  "hip thrust": {
+    view: "posterior",
+    highlights: h([
+      ["glutes", "primary"],
+      ["hamstring-biceps-femoris", "secondary"],
+    ]),
+    equipment: "Barra y banco",
+    instructions:
+      "Con la espalda apoyada en el banco y la barra sobre la cadera, empujá extendiendo las caderas hasta formar una línea recta con el torso.",
+  },
+  "peso muerto convencional": {
+    view: "posterior",
+    highlights: h([
+      ["hamstring-biceps-femoris", "primary"],
+      ["hamstring-medial", "primary"],
+      ["glutes", "primary"],
+      ["lower-back", "secondary"],
+    ]),
+    equipment: "Barra olímpica",
+    instructions:
+      "Con la barra pegada a las piernas y espalda neutra, extendé caderas y rodillas al mismo tiempo hasta quedar completamente de pie.",
+  },
+  "extension de cuadriceps": {
+    view: "anterior",
+    highlights: h([
+      ["quad-rectus", "primary"],
+      ["quad-vastus-lateral", "primary"],
+      ["quad-vastus-medial", "primary"],
+    ]),
+    equipment: "Máquina de extensión de cuádriceps",
+    instructions:
+      "Sentado en la máquina, extendé las rodillas hasta casi trabarlas y bajá controlado sin soltar el peso de golpe.",
+  },
+  "aductores en maquina": {
+    view: "anterior",
+    highlights: h([["adductors", "primary"]]),
+    equipment: "Máquina de aductores",
+    instructions: "Sentado en la máquina, juntá las piernas contra la resistencia y volvé controlado a la posición abierta.",
+  },
+  "abductores en maquina": {
+    view: "posterior",
+    highlights: h([["hip-abductors", "primary"]]),
+    equipment: "Máquina de abductores",
+    instructions: "Sentado en la máquina, separá las piernas contra la resistencia y volvé controlado a la posición cerrada.",
+  },
+  "gemelos sentado": {
+    view: "posterior",
+    highlights: h([
+      ["soleus", "primary"],
+      ["calf-lateral", "secondary"],
+      ["calf-medial", "secondary"],
+    ]),
+    equipment: "Máquina de gemelos sentado",
+    instructions:
+      "Sentado con las rodillas flexionadas a 90°, elevá los talones lo más alto posible y bajá controlado hasta el estiramiento completo.",
+    note: "Con la rodilla flexionada, el sóleo trabaja más que el gastrocnemio (que se activa más con la pierna extendida).",
+  },
+  "plancha abdominal": {
+    view: "anterior",
+    highlights: h([
+      ["abs", "primary"],
+      ["obliques", "secondary"],
+    ]),
+    equipment: "Peso corporal",
+    instructions:
+      "Apoyado en antebrazos y punta de los pies, mantené el cuerpo en línea recta desde los hombros hasta los tobillos sin dejar caer la cadera.",
+  },
+  "crunch abdominal": {
+    view: "anterior",
+    highlights: h([["abs", "primary"]]),
+    equipment: "Colchoneta",
+    instructions:
+      "Acostado con rodillas flexionadas, levantá los hombros del piso llevando las costillas hacia la pelvis, sin tirar del cuello.",
+  },
+  "elevacion de piernas colgado": {
+    view: "anterior",
+    highlights: h([
+      ["abs", "primary"],
+      ["obliques", "secondary"],
+    ]),
+    equipment: "Barra de dominadas",
+    instructions:
+      "Colgado de la barra, elevá las piernas (rectas o flexionadas) hasta la altura de la cadera controlando el balanceo del cuerpo.",
+  },
+  "rueda abdominal": {
+    view: "both",
+    highlights: h([
+      ["abs", "primary"],
+      ["obliques", "secondary"],
+      ["lower-back", "secondary"],
+    ]),
+    equipment: "Rueda abdominal",
+    instructions:
+      "De rodillas, rodá la rueda hacia adelante manteniendo el core firme y volvé a la posición inicial sin arquear la espalda baja.",
+  },
 };
 
 export const knownExercises: string[] = [
   "Press banca",
+  "Press de banca con mancuernas",
   "Press inclinado mancuernas",
+  "Aperturas con mancuernas",
   "Fondos en paralelas",
+  "Fondos en banco",
   "Extensión de tríceps en polea",
+  "Press francés",
+  "Patada de tríceps",
+  "Press militar con barra",
+  "Press militar con mancuernas",
+  "Elevaciones frontales",
+  "Elevaciones laterales",
+  "Remo al mentón",
   "Ski Ergometer - Tirón dorsal",
   "Dominadas",
   "Remo con barra",
+  "Remo con mancuerna",
+  "Remo en polea baja",
+  "Remo invertido",
+  "Pull-over con mancuerna",
   "Jalón al pecho",
-  "Curl de bíceps con barra",
   "Face pull",
+  "Curl de bíceps con barra",
+  "Curl martillo",
+  "Curl concentrado",
+  "Curl en banco Scott",
   "Sentadilla",
+  "Sentadilla búlgara",
+  "Zancadas",
   "Peso muerto rumano",
+  "Peso muerto convencional",
+  "Hip thrust",
   "Prensa de piernas",
+  "Extensión de cuádriceps",
   "Curl femoral",
+  "Aductores en máquina",
+  "Abductores en máquina",
   "Elevación de talones",
-  "Elevaciones laterales",
+  "Gemelos sentado",
+  "Plancha abdominal",
+  "Crunch abdominal",
+  "Elevación de piernas colgado",
+  "Rueda abdominal",
 ];
 
 const customRegistry: Record<string, ExerciseMedia> = {};

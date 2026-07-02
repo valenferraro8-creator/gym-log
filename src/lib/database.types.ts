@@ -38,10 +38,24 @@ export interface Database {
         Insert: { id?: string; user_id: string; label: string; exercise_name?: string | null; unit: string; target: number };
         Update: { label?: string; target?: number };
       };
+      custom_exercises: {
+        Row: { id: string; user_id: string; name: string; view: string; highlights: Json; equipment: string | null; instructions: string | null; created_at: string };
+        Insert: { id?: string; user_id: string; name: string; view: string; highlights: Json; equipment?: string | null; instructions?: string | null };
+        Update: { view?: string; highlights?: Json; equipment?: string | null; instructions?: string | null };
+      };
     };
     Views: {
       last_set_per_exercise: {
         Row: { user_id: string | null; exercise_name: string | null; weight_kg: number | null; reps: number | null; finished_at: string | null };
+      };
+      last_session_sets_per_exercise: {
+        Row: { user_id: string | null; exercise_name: string | null; set_number: number | null; weight_kg: number | null; reps: number | null };
+      };
+      best_weight_per_exercise: {
+        Row: { user_id: string | null; exercise_name: string | null; best_weight_kg: number | null; reps: number | null };
+      };
+      best_est_1rm_per_exercise: {
+        Row: { user_id: string | null; exercise_name: string | null; weight_kg: number | null; reps: number | null; est_1rm: number | null };
       };
     };
     Functions: Record<string, never>;

@@ -101,6 +101,7 @@ function computeDelta(previous: string, weight: string, reps: string) {
 function SetRow({
   index,
   set,
+  bestWeight,
   onChangeWeight,
   onChangeReps,
   onToggleDone,
@@ -111,6 +112,7 @@ function SetRow({
 }: {
   index: number;
   set: ExerciseEntry["sets"][number];
+  bestWeight?: number;
   onChangeWeight: (value: string) => void;
   onChangeReps: (value: string) => void;
   onToggleDone: () => void;
@@ -120,6 +122,8 @@ function SetRow({
   onAddDrop: () => void;
 }) {
   const delta = set.weight.trim() !== "" && set.reps.trim() !== "" ? computeDelta(set.previous, set.weight, set.reps) : null;
+  const numWeight = parseFloat(set.weight);
+  const isPR = bestWeight !== undefined && !Number.isNaN(numWeight) && numWeight > bestWeight;
 
   return (
     <div>
@@ -170,7 +174,7 @@ function SetRow({
         </div>
       )}
 
-      {set.isPR && <div className="ml-7 mt-0.5 text-[11px] font-semibold text-gold">Mejor marca personal</div>}
+      {isPR && <div className="ml-7 mt-0.5 text-[11px] font-semibold text-gold">Mejor marca personal</div>}
 
       {set.drops && set.drops.length > 0 && (
         <div className="ml-7 mt-0.5 space-y-0.5 border-l border-dashed border-border pl-2">
@@ -206,6 +210,8 @@ function SetRow({
 
 function ExerciseCard({
   ex,
+  bestWeight,
+  canMergeWithNext = false,
   onChangeSetWeight,
   onChangeSetReps,
   onToggleSetDone,
@@ -215,8 +221,12 @@ function ExerciseCard({
   onAddDrop,
   onAddSet,
   onRemoveExercise,
+  onAddToSuperset,
+  onRemoveFromSuperset,
 }: {
   ex: ExerciseEntry;
+  bestWeight?: number;
+  canMergeWithNext?: boolean;
   onChangeSetWeight: (setId: string, value: string) => void;
   onChangeSetReps: (setId: string, value: string) => void;
   onToggleSetDone: (setId: string) => void;
@@ -226,6 +236,8 @@ function ExerciseCard({
   onAddDrop: (setId: string) => void;
   onAddSet: () => void;
   onRemoveExercise: () => void;
+  onAddToSuperset?: () => void;
+  onRemoveFromSuperset?: () => void;
 }) {
   const muscleLabel = getPrimaryMuscleLabel(ex.name) ?? ex.muscle;
   const [confirmRemove, setConfirmRemove] = useState(false);
@@ -248,6 +260,12 @@ function ExerciseCard({
             <IconButton icon={MoreHorizontal} label="Más opciones del ejercicio" />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-xl border-border bg-card">
+            {onRemoveFromSuperset && (
+              <DropdownMenuItem onSelect={onRemoveFromSuperset}>Quitar de la superserie</DropdownMenuItem>
+            )}
+            {!onRemoveFromSuperset && canMergeWithNext && onAddToSuperset && (
+              <DropdownMenuItem onSelect={onAddToSuperset}>Combinar con el siguiente en superserie</DropdownMenuItem>
+            )}
             <DropdownMenuItem
               onSelect={() => setConfirmRemove(true)}
               className="text-destructive focus:text-destructive"
@@ -284,6 +302,7 @@ function ExerciseCard({
             key={s.id}
             index={i}
             set={s}
+            bestWeight={bestWeight}
             onChangeWeight={(value) => onChangeSetWeight(s.id, value)}
             onChangeReps={(value) => onChangeSetReps(s.id, value)}
             onToggleDone={() => onToggleSetDone(s.id)}
@@ -307,6 +326,7 @@ function ExerciseCard({
 
 function SupersetGroup({
   exercises,
+  bestWeights,
   onChangeSetWeight,
   onChangeSetReps,
   onToggleSetDone,
@@ -316,8 +336,10 @@ function SupersetGroup({
   onAddDrop,
   onAddSet,
   onRemoveExercise,
+  onRemoveFromSuperset,
 }: {
   exercises: ExerciseEntry[];
+  bestWeights: Record<string, number>;
   onChangeSetWeight: (exId: string, setId: string, value: string) => void;
   onChangeSetReps: (exId: string, setId: string, value: string) => void;
   onToggleSetDone: (exId: string, setId: string) => void;
@@ -327,6 +349,7 @@ function SupersetGroup({
   onAddDrop: (exId: string, setId: string) => void;
   onAddSet: (exId: string) => void;
   onRemoveExercise: (exId: string) => void;
+  onRemoveFromSuperset: (exId: string) => void;
 }) {
   return (
     <div className="shadow-card overflow-hidden rounded-2xl border border-border border-l-[3px] border-l-violet-400 bg-card">
@@ -339,6 +362,8 @@ function SupersetGroup({
           <ExerciseCard
             key={ex.id}
             ex={ex}
+            bestWeight={bestWeights[ex.name]}
+            onRemoveFromSuperset={() => onRemoveFromSuperset(ex.id)}
             onChangeSetWeight={(setId, value) => onChangeSetWeight(ex.id, setId, value)}
             onChangeSetReps={(setId, value) => onChangeSetReps(ex.id, setId, value)}
             onToggleSetDone={(setId) => onToggleSetDone(ex.id, setId)}
@@ -381,6 +406,7 @@ export function WorkoutScreen({
   onUndo,
   customExerciseNames = [],
   onCreateCustomExercise,
+  bestWeights = {},
 }: {
   exercises: ExerciseEntry[];
   setExercises: React.Dispatch<React.SetStateAction<ExerciseEntry[]>>;
@@ -392,6 +418,7 @@ export function WorkoutScreen({
   onUndo?: () => void;
   customExerciseNames?: string[];
   onCreateCustomExercise?: (name: string, media: ExerciseMedia) => void;
+  bestWeights?: Record<string, number>;
 }) {
   const todayLabel = format(new Date(), "EEEE, d 'de' MMMM", { locale: es });
   const groups = groupExercises(exercises);
@@ -432,6 +459,28 @@ export function WorkoutScreen({
 
   function removeExercise(exId: string) {
     setExercises((prev) => prev.filter((ex) => ex.id !== exId));
+  }
+
+  function addToSuperset(exIdA: string, exIdB: string) {
+    setExercises((prev) => {
+      const groupId = `ss-${Date.now()}`;
+      return prev.map((ex) => (ex.id === exIdA || ex.id === exIdB ? { ...ex, supersetGroup: groupId } : ex));
+    });
+  }
+
+  function removeFromSuperset(exId: string) {
+    setExercises((prev) => {
+      const target = prev.find((ex) => ex.id === exId);
+      if (!target?.supersetGroup) return prev;
+      const groupId = target.supersetGroup;
+      const withoutEx = prev.map((ex) => (ex.id === exId ? { ...ex, supersetGroup: undefined } : ex));
+      const remaining = withoutEx.filter((ex) => ex.supersetGroup === groupId);
+      // A superset of one exercise doesn't make sense — dissolve it too.
+      if (remaining.length === 1) {
+        return withoutEx.map((ex) => (ex.supersetGroup === groupId ? { ...ex, supersetGroup: undefined } : ex));
+      }
+      return withoutEx;
+    });
   }
 
   function addDrop(exId: string, setId: string) {
@@ -544,6 +593,7 @@ export function WorkoutScreen({
                 {g.type === "superset" ? (
                   <SupersetGroup
                     exercises={g.exercises}
+                    bestWeights={bestWeights}
                     onChangeSetWeight={(exId, setId, value) => updateSet(exId, setId, { weight: value })}
                     onChangeSetReps={(exId, setId, value) => updateSet(exId, setId, { reps: value })}
                     onToggleSetDone={toggleSetDone}
@@ -553,11 +603,19 @@ export function WorkoutScreen({
                     onAddDrop={addDrop}
                     onAddSet={addSet}
                     onRemoveExercise={removeExercise}
+                    onRemoveFromSuperset={removeFromSuperset}
                   />
                 ) : (
                   <div className="shadow-card card-interactive overflow-hidden rounded-2xl border border-border bg-card">
                     <ExerciseCard
                       ex={g.exercises[0]}
+                      bestWeight={bestWeights[g.exercises[0].name]}
+                      canMergeWithNext={groups[i + 1]?.type === "single"}
+                      onAddToSuperset={
+                        groups[i + 1]?.type === "single"
+                          ? () => addToSuperset(g.exercises[0].id, groups[i + 1].exercises[0].id)
+                          : undefined
+                      }
                       onChangeSetWeight={(setId, value) => updateSet(g.exercises[0].id, setId, { weight: value })}
                       onChangeSetReps={(setId, value) => updateSet(g.exercises[0].id, setId, { reps: value })}
                       onToggleSetDone={(setId) => toggleSetDone(g.exercises[0].id, setId)}

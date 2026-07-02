@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
 import { Area, AreaChart, Bar, BarChart, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { LineChart, Target, TrendingDown, TrendingUp } from "lucide-react";
+import { LineChart, Plus, Target, TrendingDown, TrendingUp } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { SignOutButton } from "@/components/SignOutButton";
 import { MuscleBody } from "@/components/MuscleBody";
 import { GoalRow } from "@/components/GoalRow";
+import { GoalEditDialog } from "@/components/GoalEditDialog";
+import { IconButton } from "@/components/IconButton";
 import { HeroStat } from "@/components/HeroStat";
 import { EmptyState } from "@/components/EmptyState";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/useAuth";
 import { useProgressData } from "@/hooks/useProgressData";
-import { useGoals, type GoalRecord } from "@/hooks/useGoals";
+import { useGoals, type GoalRecord, type NewGoal } from "@/hooks/useGoals";
 import {
   bestWeightEver,
   distinctExerciseNames,
@@ -41,19 +44,42 @@ function computeGoalCurrent(goal: GoalRecord, sessions: SessionRow[]): number {
   return Math.round((sessionsInLastDays(sessions, 28) / 4) * 10) / 10;
 }
 
-function GoalsCard({ goals, sessions }: { goals: GoalRecord[]; sessions: SessionRow[] }) {
-  if (goals.length === 0) return null;
+function GoalsCard({
+  goals,
+  sessions,
+  customExerciseNames,
+  onCreate,
+  onDelete,
+}: {
+  goals: GoalRecord[];
+  sessions: SessionRow[];
+  customExerciseNames: string[];
+  onCreate: (goal: NewGoal) => Promise<void>;
+  onDelete: (id: string) => void;
+}) {
   return (
     <div className="shadow-card mb-4 space-y-3 rounded-2xl border border-border bg-card p-4">
-      <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Objetivos</p>
-      <div className="space-y-3">
-        {goals.map((g) => (
-          <GoalRow
-            key={g.id}
-            goal={{ id: g.id, label: g.label, unit: g.unit, current: computeGoalCurrent(g, sessions), target: g.target }}
-          />
-        ))}
+      <div className="flex items-center justify-between">
+        <p className="text-[10.5px] font-bold uppercase tracking-wide text-muted-foreground">Objetivos</p>
+        <GoalEditDialog
+          customNames={customExerciseNames}
+          onSave={onCreate}
+          trigger={<IconButton icon={Plus} label="Agregar objetivo" className="h-6 w-6" />}
+        />
       </div>
+      {goals.length === 0 ? (
+        <p className="text-xs text-muted-foreground">Todavía no tenés objetivos. Agregá uno para hacer seguimiento.</p>
+      ) : (
+        <div className="space-y-3">
+          {goals.map((g) => (
+            <GoalRow
+              key={g.id}
+              goal={{ id: g.id, label: g.label, unit: g.unit, current: computeGoalCurrent(g, sessions), target: g.target }}
+              onDelete={() => onDelete(g.id)}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -342,10 +368,10 @@ function MusclesTab({ sessions }: { sessions: SessionRow[] }) {
   );
 }
 
-export function ProgressScreen() {
+export function ProgressScreen({ customExerciseNames = [] }: { customExerciseNames?: string[] }) {
   const { user } = useAuth();
   const { sessions, loading: sessionsLoading } = useProgressData(user);
-  const { goals } = useGoals(user);
+  const { goals, create: createGoal, remove: removeGoal } = useGoals(user);
   const [tab, setTab] = useState<SubTab>("ejercicio");
   const tabs: { id: SubTab; label: string }[] = [
     { id: "ejercicio", label: "Ejercicio" },
@@ -357,7 +383,7 @@ export function ProgressScreen() {
   if (sessionsLoading) {
     return (
       <div className="pb-4">
-        <TopBar title="Progreso" />
+        <TopBar title="Progreso" action={<SignOutButton />} />
         <div className="grid place-items-center py-16">
           <div className="h-6 w-6 animate-spin rounded-full border-2 border-border border-t-primary" />
         </div>
@@ -368,7 +394,14 @@ export function ProgressScreen() {
   if (sessions.length === 0) {
     return (
       <div className="pb-4">
-        <TopBar title="Progreso" />
+        <TopBar title="Progreso" action={<SignOutButton />} />
+        <GoalsCard
+          goals={goals}
+          sessions={sessions}
+          customExerciseNames={customExerciseNames}
+          onCreate={createGoal}
+          onDelete={removeGoal}
+        />
         <EmptyState
           icon={Target}
           title="Todavía no hay entrenos guardados"
@@ -380,9 +413,15 @@ export function ProgressScreen() {
 
   return (
     <div className="pb-4">
-      <TopBar title="Progreso" />
+      <TopBar title="Progreso" action={<SignOutButton />} />
 
-      <GoalsCard goals={goals} sessions={sessions} />
+      <GoalsCard
+        goals={goals}
+        sessions={sessions}
+        customExerciseNames={customExerciseNames}
+        onCreate={createGoal}
+        onDelete={removeGoal}
+      />
 
       <div className="mb-4 flex gap-1 rounded-xl bg-secondary p-1">
         {tabs.map((t) => (

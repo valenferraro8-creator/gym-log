@@ -51,6 +51,9 @@ export interface Database {
       last_session_sets_per_exercise: {
         Row: { user_id: string | null; exercise_name: string | null; set_number: number | null; weight_kg: number | null; reps: number | null };
       };
+      best_weight_per_exercise: {
+        Row: { user_id: string | null; exercise_name: string | null; best_weight_kg: number | null };
+      };
     };
     Functions: Record<string, never>;
     Enums: Record<string, never>;

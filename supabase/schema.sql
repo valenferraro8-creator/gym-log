@@ -184,3 +184,19 @@ where ss.done = true
     limit 1
   )
 order by s.user_id, se.exercise_name, ss.set_number;
+
+-- ================================================================
+-- Vista: mejor peso histórico por ejercicio (todas las sesiones, no
+-- solo las últimas). Usada para detectar automáticamente cuándo una
+-- serie recién guardada es un nuevo récord personal.
+-- ================================================================
+create or replace view public.best_weight_per_exercise as
+select
+  s.user_id,
+  se.exercise_name,
+  max(ss.weight_kg) as best_weight_kg
+from public.session_sets ss
+join public.session_exercises se on se.id = ss.session_exercise_id
+join public.workout_sessions s   on s.id = se.session_id
+where ss.done = true and ss.weight_kg is not null
+group by s.user_id, se.exercise_name;

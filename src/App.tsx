@@ -6,7 +6,7 @@ import { ProgressScreen } from "@/screens/ProgressScreen";
 import { AuthScreen } from "@/screens/AuthScreen";
 import { useAuth } from "@/hooks/useAuth";
 import { useRoutines, type RoutineExerciseInput } from "@/hooks/useRoutines";
-import { saveWorkoutSession, loadLastSets, type PreviousSets } from "@/hooks/useWorkout";
+import { saveWorkoutSession, loadLastSets, loadBestWeights, type PreviousSets } from "@/hooks/useWorkout";
 import { useCustomExercises } from "@/hooks/useCustomExercises";
 import { supabase } from "@/lib/supabase";
 import { type ExerciseEntry, type Routine } from "@/data/mock";
@@ -76,6 +76,7 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<LastSaved | null>(null);
+  const [bestWeights, setBestWeights] = useState<Record<string, number>>({});
   const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Persist workout to localStorage on every change
@@ -148,7 +149,9 @@ function App() {
     let previousSets: PreviousSets = {};
     if (user) {
       const names = routine.exercises.map((e) => e.name);
-      previousSets = await loadLastSets(user.id, names);
+      const [prevSets, bests] = await Promise.all([loadLastSets(user.id, names), loadBestWeights(user.id, names)]);
+      previousSets = prevSets;
+      setBestWeights(bests);
     }
 
     const built = buildWorkoutFromRoutine(routine, previousSets);
@@ -247,6 +250,7 @@ function App() {
                   onUndo={handleUndoSave}
                   customExerciseNames={customExerciseNames}
                   onCreateCustomExercise={createCustomExercise}
+                  bestWeights={bestWeights}
                 />
               )}
               {tab === "routines" && (
@@ -260,7 +264,7 @@ function App() {
                   customExerciseNames={customExerciseNames}
                 />
               )}
-              {tab === "progress" && <ProgressScreen />}
+              {tab === "progress" && <ProgressScreen customExerciseNames={customExerciseNames} />}
             </div>
           </div>
         </div>

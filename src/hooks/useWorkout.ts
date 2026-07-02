@@ -27,6 +27,15 @@ export async function saveWorkoutSession(
 
   if (error || !session) throw error ?? new Error("Failed to create session");
 
+  // Running best weight per exercise, seeded from history, so a set only counts
+  // as a new PR when it actually beats the previous record (not just the first
+  // time an exercise is ever logged) — and updates as we go in case the same
+  // session has more than one new best for the same exercise.
+  const bestWeights = await loadBestWeights(
+    userId,
+    exercises.map((ex) => ex.name)
+  );
+
   for (let i = 0; i < exercises.length; i++) {
     const ex = exercises[i];
 
@@ -47,13 +56,19 @@ export async function saveWorkoutSession(
     if (doneSets.length === 0) continue;
 
     let setNumber = 0;
-    const mainRows = doneSets.map((s) => ({
-      set_number: ++setNumber,
-      weight_kg: s.weight !== "" ? parseFloat(s.weight) : null,
-      reps: s.reps !== "" ? parseInt(s.reps, 10) : null,
-      is_pr: s.isPR ?? false,
-      done: true,
-    }));
+    const mainRows = doneSets.map((s) => {
+      const weight_kg = s.weight !== "" ? parseFloat(s.weight) : null;
+      const priorBest = bestWeights[ex.name] ?? 0;
+      const is_pr = weight_kg != null && priorBest > 0 && weight_kg > priorBest;
+      if (weight_kg != null && weight_kg > priorBest) bestWeights[ex.name] = weight_kg;
+      return {
+        set_number: ++setNumber,
+        weight_kg,
+        reps: s.reps !== "" ? parseInt(s.reps, 10) : null,
+        is_pr,
+        done: true,
+      };
+    });
 
     const { data: insertedSets, error: setsError } = await supabase
       .from("session_sets")
@@ -85,6 +100,23 @@ export async function saveWorkoutSession(
   }
 
   return session;
+}
+
+/** Returns a map of exerciseName → best weight_kg ever logged (all-time, not just recent sessions). */
+export async function loadBestWeights(userId: string, exerciseNames: string[]): Promise<Record<string, number>> {
+  if (exerciseNames.length === 0) return {};
+
+  const { data } = await supabase
+    .from("best_weight_per_exercise")
+    .select("exercise_name, best_weight_kg")
+    .eq("user_id", userId)
+    .in("exercise_name", exerciseNames);
+
+  const map: Record<string, number> = {};
+  for (const row of data ?? []) {
+    if (row.exercise_name && row.best_weight_kg != null) map[row.exercise_name] = row.best_weight_kg;
+  }
+  return map;
 }
 
 /**
